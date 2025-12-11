@@ -4,9 +4,9 @@ LDFLAGS = -L/opt/homebrew/lib -lSDL2
 GPROF_CFLAGS = -Wall -Wextra -std=c99 -pg -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE
 TARGET = cavitydetection
 TARGET_GPROF = cavitydetection_gprof
-SRC = cavitydetection.c render.c
-OBJ = cavitydetection.o render.o
-OBJ_GPROF = cavitydetection_gprof.o render_gprof.o
+SRC = cavitydetection.c render.c testimage.c
+OBJ = cavitydetection.o render.o testimage.o
+OBJ_GPROF = cavitydetection_gprof.o render_gprof.o testimage_gprof.o
 GPROF_OUT = gmon.out
 
 all: $(TARGET)
@@ -28,6 +28,9 @@ cavitydetection_gprof.o: cavitydetection.c
 
 render_gprof.o: render.c
 	$(CC) $(GPROF_CFLAGS) -c render.c -o render_gprof.o
+
+testimage_gprof.o: testimage.c
+	$(CC) $(GPROF_CFLAGS) -c testimage.c -o testimage_gprof.o
 
 profile: $(TARGET_GPROF)
 	./$(TARGET_GPROF)

@@ -3,6 +3,7 @@
 #include <math.h>
 #include <time.h>
 #include "render.h"
+#include "testimage.h"
 
 #define N 512  // Image width
 #define M 512  // Image height
@@ -158,39 +159,7 @@ void DetectRoots(unsigned char ce[N][M], unsigned char image_out[N][M])
     }
 }
 
-/**
- * Generate test image: 512x512 grayscale with noise and a black disk
- * Disk: 100 pixel diameter (50 pixel radius), filled with black
- */
-void GenerateTestImage(unsigned char image_in[N][M])
-{
-    int center_x = N / 2;
-    int center_y = M / 2;
-    int radius = 50;        // 100 pixel diameter
-    
-    srand(time(NULL));
-    
-    // Fill with random noise (grayscale 0-255)
-    for (int y = 0; y < M; ++y) {
-        for (int x = 0; x < N; ++x) {
-            image_in[x][y] = (unsigned char)(rand() % 256);
-        }
-    }
-    
-    // Draw black disk (filled circle)
-    for (int y = 0; y < M; ++y) {
-        for (int x = 0; x < N; ++x) {
-            double dx = x - center_x;
-            double dy = y - center_y;
-            double distance = sqrt(dx * dx + dy * dy);
-            
-            // Check if pixel is within the disk radius
-            if (distance <= radius) {
-                image_in[x][y] = 0;  // Black
-            }
-        }
-    }
-}
+/* GenerateTestImage moved to `testimage.c` */
 
 /**
  * Main function
