@@ -37,3 +37,5 @@ gprof_report.txt
 # Misc
 *.log
 
+cavitydetection
+cavitydetection.o
