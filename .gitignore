@@ -1,0 +1,39 @@
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.gmon.out
+
+# Executables
+cavitydetection
+cavitydetection_gprof
+loopoptimization1
+loopoptimization1_gprof
+
+# Backup and temp files
+*~
+*.swp
+*.swo
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+
+# Profiling and reports
+gprof_report.txt
+
+# Images and outputs
+*.png
+*.bmp
+*.ppm
+*.pgm
+
+# Misc
+*.log
+
