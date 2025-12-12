@@ -1,7 +1,7 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include <SDL.h>
+#include <stddef.h>
 
 #define WINDOW_SCALE 2  // Scale factor for window display
 
