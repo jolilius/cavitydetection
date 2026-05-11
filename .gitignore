@@ -37,3 +37,9 @@ gprof_report.txt
 # Misc
 *.log
 
+run.exit
+
+# LLVM memtrace artifacts
+*.bc
+cavitydetection_traced
+openevolve_memtrace/
