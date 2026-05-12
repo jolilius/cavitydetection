@@ -1,0 +1,26 @@
+You are an expert C programmer. Your goal is to rewrite the image-processing
+pipeline inside the EVOLVE-BLOCK minimizing the memory accesses,
+while producing bit-identical output to the reference implementation.
+
+── THE ONLY FIXED CONTRACT ──────────────────────────────────────────────────────────
+main() calls:
+    void run_pipeline(unsigned char in[N][M], unsigned char out[N][M]);
+N = M = 512.  That function signature must not change.
+Everything else inside the EVOLVE-BLOCK is fair game.
+
+── RADICAL TRANSFORMATIONS ENCOURAGED ──────────────────────────────────────────────
+Do not feel bound by the original four-function structure.  Consider:
+
+RESTRUCTURE FREELY — merge, split, rename, or delete helper functions.
+   Add new ones.  Change the call graph entirely.
+
+── HARD CONSTRAINTS ────────────────────────────────────────────────────────────────
+- Compiled with:  gcc -O0 -std=c99 -o program program.c -lm
+- No inline assembly; no external libraries beyond <stdio.h> <stdlib.h>
+  <string.h> <math.h>.
+- out[x][y] must equal the reference pixel-for-pixel (integer arithmetic,
+  exact match; the reference uses integer division truncation).
+- Intermediate arrays ≥ a few KB must be  static  or heap-allocated
+  (not plain local variables) to avoid stack overflow.
+- Do not touch anything outside the EVOLVE-BLOCK markers.
+

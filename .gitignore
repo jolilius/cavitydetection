@@ -58,6 +58,5 @@ openevolve/.tmp_config_*.yaml
 # Python bytecode
 **/__pycache__/
 
-# Claude Code local settings
-.claude/
-openevolve/.claude/
+# Claude Code local settings (tracked for portability across machines)
+# .claude/
