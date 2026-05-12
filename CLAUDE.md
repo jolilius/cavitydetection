@@ -2,6 +2,44 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Prerequisites
+
+### System packages
+
+**Linux (Ubuntu/Debian):**
+```sh
+sudo apt install gcc make libsdl2-dev llvm clang
+```
+
+**macOS:**
+```sh
+brew install llvm sdl2
+```
+
+The Makefile auto-detects LLVM versions 15–20 via `brew --prefix llvm`; override with `LLVM_PREFIX=/path/to/llvm make memtrace`.
+
+### Ollama (for OpenEvolve experiments)
+
+Install from https://ollama.com, then pull a 30B-class coding model (smaller models produce invalid C):
+
+```sh
+ollama pull qwen2.5-coder:32b
+```
+
+Start the server before running experiments: `ollama serve`.
+
+### OpenEvolve
+
+Clone as a sibling directory:
+
+```sh
+git clone https://github.com/codelion/openevolve ../openevolve
+cd ../openevolve
+python3 -m venv .venv
+.venv/bin/pip install -e .
+cd -
+```
+
 ## Build commands
 
 ```sh
@@ -32,7 +70,7 @@ All pipeline stages operate on fixed-size `unsigned char image[512][512]` arrays
 
 After each stage, `DisplayImage` (`render.c`) opens an SDL2 window showing the intermediate result. The user presses any key or closes the window to advance to the next stage.
 
-**Array layout note**: arrays are indexed `[x][y]` (x is the outer dimension), which is column-major in memory. This is significant when reasoning about cache behavior, which is a primary purpose of this codebase.
+**Array layout and cache optimization**: Arrays are indexed `[x][y]` where x is the outer (row) dimension. In row-major memory layout, `image[x][y]` is at offset `x*512 + y`, so an inner loop over `y` accesses sequential bytes while an inner loop over `x` strides 512 bytes per step. **Swapping loop order from `for(x) for(y)` to `for(y) for(x)` is the single most impactful cache optimization available** — converting stride-512 cache misses into sequential accesses can reduce D1 misses by ~5×. This is the primary optimization opportunity explored in OpenEvolve experiments.
 
 ### LLVM memory-tracing subsystem (`memtrace_pass.cpp`, `memtrace_runtime.c`)
 
@@ -49,26 +87,71 @@ A standalone, self-contained program (no SDL2 dependency) used as a study case f
 
 ## OpenEvolve integration (`openevolve/`)
 
-Uses [OpenEvolve](../openevolve) to evolve cache-efficient versions of the pipeline functions via LLM-guided mutation.
+Uses [OpenEvolve](../openevolve) to evolve cache-efficient versions of the pipeline functions via LLM-guided mutation. An LLM proposes code mutations; each candidate is evaluated for correctness and memory-access efficiency (measured via LLVM instrumentation).
 
-**Files:**
-- `openevolve/initial_program.c` — self-contained seed (no SDL2): all four pipeline functions inside `EVOLVE-BLOCK` markers, plus frozen reference implementations for pixel-exact correctness checking.
-- `openevolve/evaluator.py` — compiles with `gcc -O0`, checks correctness, measures wall-clock time (20 bench runs, median of 3) and D1 cache misses via `valgrind --tool=cachegrind` (1 bench run). Score 1.0 = unoptimised baseline.
-- `openevolve/config.yaml` — Anthropic API (reads `$ANTHROPIC_API_KEY`), 80 iterations, diff-based evolution.
+**Key files:**
+- `openevolve/initial_program.c` — self-contained seed (no SDL2): the pipeline functions to evolve, wrapped in `EVOLVE-BLOCK` markers, plus frozen reference implementations for pixel-exact correctness checks.
+- `openevolve/evaluator.py` — compiles with `gcc -O0`, verifies correctness, and measures memory accesses via the LLVM memtrace instrumentation. Score formula: `mem_score = 128,862,705 / accesses` (scores > 1.0 = better than baseline).
+- `openevolve/config.yaml` — OpenEvolve settings (model names, iteration limits, early stopping, population size).
+- `openevolve/prompts/` — system message variants; each `.txt` file is treated as a separate experiment.
 
-**Running:**
+### Baseline metrics
+
+The unoptimized baseline (initial_program.c, gcc -O0) makes **128,862,705** total memory accesses:
+
+| Function      | Accesses    |
+|---------------|-------------|
+| GaussBlur     | 19,894,278  |
+| ComputeEdges  | 67,604,444  |
+| DetectRoots   | 41,363,979  |
+| run_pipeline  | 4           |
+
+### One-time setup
+
+Before running experiments, compile the LLVM pass plugin and runtime:
 
 ```sh
-# Ollama must be running (ollama serve)
-../openevolve/.venv/bin/python ../openevolve/openevolve-run.py \
-    openevolve/initial_program.c openevolve/evaluator.py \
-    --config openevolve/config.yaml --iterations 80
+make memtrace_pass.so memtrace_runtime.o
 ```
 
-To resume from a checkpoint:
+### Running experiments
+
+Run a single prompt variant (80 iterations, writes to `openevolve_output/<name>/`):
 
 ```sh
-... --checkpoint <output_dir> --iterations 20
+../openevolve/.venv/bin/python openevolve/run_experiment.py <prompt_name> --iterations 80
 ```
 
-**Calibration:** baseline scores ~1.0 (`time_ms ≈ 420`, `d1_misses ≈ 7.7M`). The primary opportunity is swapping the `for(y) for(x)` loop order to `for(x) for(y)` throughout, which turns stride-512 cache misses into sequential byte accesses and should yield ~5× fewer D1 misses.
+Run all prompt variants in `openevolve/prompts/`:
+
+```sh
+make evolve-all                 # 80 iterations per prompt
+ITERATIONS=200 make evolve-all  # override iteration count
+```
+
+View ranked results:
+
+```sh
+make show-results
+```
+
+Output shows `mem_score`, iteration where best was found (convergence speed), total accesses, and % reduction from baseline.
+
+### Configuration
+
+Edit `openevolve/config.yaml` to adjust:
+
+| Key | Purpose |
+|-----|---------|
+| `llm.primary_model` | Ollama model name (e.g. `qwen2.5-coder:32b`) |
+| `llm.api_base` | Ollama endpoint (default `http://localhost:11434/v1/`) |
+| `database.population_size` | MAP-Elites population size |
+| `early_stopping_patience` | Iterations without improvement before stopping |
+
+The `prompt.system_message` in `config.yaml` is overridden at runtime by the prompt file; editing the file directly only affects bare `make evolve` runs.
+
+### Adding a new prompt variant
+
+1. Copy `openevolve/prompts/baseline.txt` to `openevolve/prompts/<name>.txt`
+2. Edit the system message
+3. Run `make evolve-all` or `run_experiment.py <name>` for that variant alone
