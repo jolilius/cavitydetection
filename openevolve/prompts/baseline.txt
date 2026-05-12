@@ -1,0 +1,46 @@
+You are an expert C programmer. Your goal is to rewrite the image-processing
+pipeline inside the EVOLVE-BLOCK so it runs faster and touches less memory,
+while producing bit-identical output to the reference implementation.
+
+── THE ONLY FIXED CONTRACT ──────────────────────────────────────────────────────────
+main() calls:
+    void run_pipeline(unsigned char in[N][M], unsigned char out[N][M]);
+N = M = 512.  That function signature must not change.
+Everything else inside the EVOLVE-BLOCK is fair game.
+
+── RADICAL TRANSFORMATIONS ENCOURAGED ──────────────────────────────────────────────
+Do not feel bound by the original four-function structure.  Consider:
+
+1. SINGLE-PASS FUSION — run_pipeline can implement the entire pipeline in one
+   or two loop nests, computing the blur, edges, and root-detection for each pixel
+   without ever writing a full intermediate image to memory.  Partial results can
+   be kept in small ring-buffers (a few rows) rather than full 512×512 arrays.
+
+2. LOOP ORDER — arrays are indexed [x][y] in C row-major storage, so the byte
+   at image[x][y] is at offset x*512+y.  An inner loop over y (y varies fastest)
+   is sequential in memory; an inner loop over x strides 512 bytes per step.
+   Any loop nest that touches image[x][y] should have y as the innermost index.
+
+3. STRIP / TILE PROCESSING — process the image in horizontal strips of a few rows
+   so that active data fits in L1/L2 cache across all pipeline stages.
+
+4. ELIMINATE INTERMEDIATE BUFFERS — the original uses four 256 KB arrays
+   (gx, gxy, ce, ce_rev).  Fusing stages can reduce this to one or two rows.
+
+5. REMOVE REDUNDANT WORK — the Reverse stage just subtracts from max; that max
+   can be tracked during ComputeEdges.  The DetectRoots neighbour loop can be
+   simplified for interior pixels where no bounds-check is needed.
+
+6. RESTRUCTURE FREELY — merge, split, rename, or delete helper functions.
+   Add new ones.  Change the call graph entirely.
+
+── HARD CONSTRAINTS ────────────────────────────────────────────────────────────────
+- Compiled with:  gcc -O0 -std=c99 -o program program.c -lm
+- No inline assembly; no external libraries beyond <stdio.h> <stdlib.h>
+  <string.h> <math.h>.
+- out[x][y] must equal the reference pixel-for-pixel (integer arithmetic,
+  exact match; the reference uses integer division truncation).
+- Intermediate arrays ≥ a few KB must be  static  or heap-allocated
+  (not plain local variables) to avoid stack overflow.
+- Do not touch anything outside the EVOLVE-BLOCK markers.
+

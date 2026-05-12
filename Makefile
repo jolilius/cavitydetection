@@ -2,28 +2,46 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -O2 -D_THREAD_SAFE
 
 # ── LLVM memory-access tracing ──────────────────────────────────────────────
-# Resolve the real LLVM prefix: prefer an explicit override, then a Homebrew
-# install that actually exists on disk, then fall back to /usr/local.
-LLVM_PREFIX    ?= $(shell \
-  BREW_PFX=$$(brew --prefix llvm 2>/dev/null); \
-  if [ -n "$$BREW_PFX" ] && [ -d "$$BREW_PFX/bin" ]; then \
-    echo "$$BREW_PFX"; \
-  elif [ -d /usr/local/opt/llvm/bin ]; then \
-    echo /usr/local/opt/llvm; \
-  else \
-    echo LLVM_NOT_FOUND; \
-  fi)
+# Detect platform and find LLVM.
+# Override with: LLVM_PREFIX=/path/to/llvm make memtrace
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+  LLVM_PREFIX ?= $(shell \
+    BREW_PFX=$$(brew --prefix llvm 2>/dev/null); \
+    if [ -n "$$BREW_PFX" ] && [ -d "$$BREW_PFX/bin" ]; then \
+      echo "$$BREW_PFX"; \
+    elif [ -d /usr/local/opt/llvm/bin ]; then \
+      echo /usr/local/opt/llvm; \
+    else \
+      echo LLVM_NOT_FOUND; \
+    fi)
+  PASS_EXT      = dylib
+  PASS_LDFLAGS  = -dynamiclib -Wl,-undefined,dynamic_lookup
+else
+  # Linux: prefer the highest versioned LLVM that has clang
+  LLVM_PREFIX ?= $(shell \
+    for v in 20 19 18 17; do \
+      if [ -x /usr/lib/llvm-$$v/bin/clang ]; then \
+        echo /usr/lib/llvm-$$v; exit; \
+      fi; \
+    done; \
+    echo LLVM_NOT_FOUND)
+  PASS_EXT      = so
+  PASS_LDFLAGS  = -shared -fPIC
+endif
 
 ifeq ($(LLVM_PREFIX),LLVM_NOT_FOUND)
-$(error LLVM not found. Install it with: brew install llvm)
+  $(error LLVM not found. On Linux: sudo apt install llvm clang)
 endif
 
 LLVM_CONFIG     = $(LLVM_PREFIX)/bin/llvm-config
 LLVM_CLANG      = $(LLVM_PREFIX)/bin/clang
 LLVM_CLANGXX    = $(LLVM_PREFIX)/bin/clang++
 LLVM_OPT        = $(LLVM_PREFIX)/bin/opt
-LLVM_CXXFLAGS   = $(shell $(LLVM_CONFIG) --cxxflags 2>/dev/null)
-MEMTRACE_PASS   = memtrace_pass.dylib
+LLVM_CXXFLAGS   = $(shell $(LLVM_CONFIG) --cxxflags 2>/dev/null) \
+                  $(if $(filter Linux,$(UNAME_S)),-I/usr/include/$(notdir $(LLVM_PREFIX)))
+MEMTRACE_PASS   = memtrace_pass.$(PASS_EXT)
 MEMTRACE_RT_OBJ = memtrace_runtime.o
 MEMTRACE_BC     = cavitydetection_memtrace.bc
 MEMTRACE_IOBJ   = cavitydetection_memtrace.o
@@ -32,8 +50,13 @@ LDFLAGS =
 GPROF_CFLAGS = -Wall -Wextra -std=c99 -pg -D_THREAD_SAFE
 
 # SDL2 flags are only needed for the render/display target and the main program
-SDL_CFLAGS = -I/opt/homebrew/include/SDL2
-SDL_LDFLAGS = -L/opt/homebrew/lib -lSDL2
+ifeq ($(UNAME_S),Darwin)
+  SDL_CFLAGS  = $(shell sdl2-config --cflags 2>/dev/null || echo -I/opt/homebrew/include/SDL2)
+  SDL_LDFLAGS = $(shell sdl2-config --libs   2>/dev/null || echo -L/opt/homebrew/lib -lSDL2)
+else
+  SDL_CFLAGS  = $(shell sdl2-config --cflags 2>/dev/null || pkg-config --cflags sdl2 2>/dev/null)
+  SDL_LDFLAGS = $(shell sdl2-config --libs   2>/dev/null || pkg-config --libs   sdl2 2>/dev/null)
+endif
 TARGET = cavitydetection
 TARGET_GPROF = cavitydetection_gprof
 SRC = cavitydetection.c render.c testimage.c
@@ -82,12 +105,8 @@ testimage_gprof.o: testimage.c
 
 # ── memtrace build rules ────────────────────────────────────────────────────
 # 1. Compile the pass plugin
-# On macOS, -undefined dynamic_lookup lets LLVM symbols resolve from the
-# host `opt` binary at load time (standard practice for pass plugins).
 $(MEMTRACE_PASS): memtrace_pass.cpp
-	$(LLVM_CLANGXX) -dynamiclib $(LLVM_CXXFLAGS) \
-	    -Wl,-undefined,dynamic_lookup \
-	    -o $@ $<
+	$(LLVM_CLANGXX) $(PASS_LDFLAGS) $(LLVM_CXXFLAGS) -o $@ $<
 
 # 2. Compile the runtime callbacks
 $(MEMTRACE_RT_OBJ): memtrace_runtime.c
@@ -120,7 +139,8 @@ profile: $(TARGET_GPROF)
 clean:
 	rm -f $(OBJ) $(OBJ_GPROF) $(TARGET) $(TARGET_GPROF) $(GPROF_OUT) gprof_report.txt \
 		$(LOOP_OBJ) $(LOOP_GPROF_OBJ) loopoptimization1 loopoptimization1_gprof \
-		$(MEMTRACE_PASS) $(MEMTRACE_RT_OBJ) $(MEMTRACE_BC) $(MEMTRACE_IOBJ) \
+		memtrace_pass.so memtrace_pass.dylib \
+		$(MEMTRACE_RT_OBJ) $(MEMTRACE_BC) $(MEMTRACE_IOBJ) \
 		cavitydetection_instr.bc $(MEMTRACE_BIN) memtrace.log
 
 run-loopoptimization1: loopoptimization1
@@ -129,4 +149,27 @@ run-loopoptimization1: loopoptimization1
 run: $(TARGET)
 	./$(TARGET)
 
-.PHONY: all clean run profile memtrace
+OPENEVOLVE_PYTHON = ../openevolve/.venv/bin/python
+OPENEVOLVE_RUN    = ../openevolve/openevolve-run.py
+PROMPTS           = $(wildcard openevolve/prompts/*.txt)
+PROMPT_NAMES      = $(basename $(notdir $(PROMPTS)))
+
+evolve:
+	$(OPENEVOLVE_PYTHON) $(OPENEVOLVE_RUN) \
+		openevolve/initial_program.c openevolve/evaluator.py \
+		--config openevolve/config.yaml \
+		--iterations $${ITERATIONS:-10}
+
+evolve-all:
+	@echo "Running experiments for prompts: $(PROMPT_NAMES)"
+	@for p in $(PROMPT_NAMES); do \
+		echo ""; \
+		echo "=== Experiment: $$p ==="; \
+		$(OPENEVOLVE_PYTHON) openevolve/run_experiment.py $$p \
+			--iterations $${ITERATIONS:-80}; \
+	done
+
+show-results:
+	$(OPENEVOLVE_PYTHON) openevolve/show_results.py
+
+.PHONY: all clean run profile memtrace evolve evolve-all show-results

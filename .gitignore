@@ -41,5 +41,23 @@ run.exit
 
 # LLVM memtrace artifacts
 *.bc
+*.so
+*.dylib
 cavitydetection_traced
 openevolve_memtrace/
+
+# OpenEvolve experiment outputs (large; regenerate with make evolve-all)
+openevolve/openevolve_output/
+
+# Compiled test binary built from initial_program.c
+openevolve/initial_program
+
+# Temporary config files written by run_experiment.py
+openevolve/.tmp_config_*.yaml
+
+# Python bytecode
+**/__pycache__/
+
+# Claude Code local settings
+.claude/
+openevolve/.claude/
