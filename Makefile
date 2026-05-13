@@ -161,6 +161,8 @@ evolve:
 		--iterations $${ITERATIONS:-10}
 
 evolve-all:
+	@echo "Running all prompt variants (explanations enabled by default)..."
+	@echo "To skip explanation generation, use: EXPLAIN_GENERATIONS=0 make evolve-all"
 	@echo "Running experiments for prompts: $(PROMPT_NAMES)"
 	@for p in $(PROMPT_NAMES); do \
 		echo ""; \
@@ -168,6 +170,34 @@ evolve-all:
 		$(OPENEVOLVE_PYTHON) openevolve/run_experiment.py $$p \
 			--iterations $${ITERATIONS:-80}; \
 	done
+
+evolve-explain-test:
+	@echo "Running baseline prompt with explanation generation (10 iterations)..."
+	$(OPENEVOLVE_PYTHON) openevolve/run_experiment.py baseline --iterations 10
+	@echo "✓ Results written to openevolve_output/baseline/results.json"
+	@echo "View results:"
+	@echo "  make show-consolidated-results"
+
+show-explanations:
+	$(OPENEVOLVE_PYTHON) -c " \
+	  import sys; sys.path.insert(0, 'openevolve'); \
+	  from results_loader import load_all_results; \
+	  df = load_all_results(); \
+	  if len(df) > 0: \
+	    if 'explanation' in df.columns: \
+	      explained = df[df['explanation'].notna()][['iteration', 'prompt', 'improvement_percent', 'explanation']]; \
+	      print(explained.to_string(index=False)); \
+	    else: \
+	      print('No explanation column found in results'); \
+	  else: \
+	    print('No results loaded'); \
+	"
+
+test-explanations-disabled:
+	@echo "Testing with EXPLAIN_GENERATIONS=0..."
+	EXPLAIN_GENERATIONS=0 $(OPENEVOLVE_PYTHON) openevolve/run_experiment.py baseline --iterations 5
+	@echo "✓ Experiment completed without explanations"
+	@grep -q "explanation" openevolve_output/baseline/results.json && echo "⚠ Explanation field found in results" || echo "✓ No explanations in results (as expected)"
 
 show-results:
 	$(OPENEVOLVE_PYTHON) openevolve/show_results.py
@@ -177,4 +207,4 @@ show-consolidated-results:
 
 results-summary: show-consolidated-results
 
-.PHONY: all clean run profile memtrace evolve evolve-all show-results show-consolidated-results results-summary
+.PHONY: all clean run profile memtrace evolve evolve-all show-results show-consolidated-results results-summary evolve-explain-test show-explanations test-explanations-disabled
