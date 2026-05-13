@@ -138,7 +138,7 @@ def evaluate(program_path: str) -> EvaluationResult:
     artifacts.update({f"accesses_{fn}": str(cnt) for fn, cnt in per_func.items()})
 
     return EvaluationResult(
-        metrics={"mem_score": score},
+        metrics={"mem_score": score, "combined_score": score},
         artifacts=artifacts,
     )
 
@@ -185,7 +185,7 @@ def _fail(msg: str, detail: str = "") -> EvaluationResult:
     if detail:
         arts["detail"] = detail
     return EvaluationResult(
-        metrics={"mem_score": 0.0},
+        metrics={"mem_score": 0.0, "combined_score": 0.0},
         artifacts=arts,
     )
 
