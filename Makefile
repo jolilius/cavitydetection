@@ -172,4 +172,9 @@ evolve-all:
 show-results:
 	$(OPENEVOLVE_PYTHON) openevolve/show_results.py
 
-.PHONY: all clean run profile memtrace evolve evolve-all show-results
+show-consolidated-results:
+	$(OPENEVOLVE_PYTHON) openevolve/show_consolidated.py
+
+results-summary: show-consolidated-results
+
+.PHONY: all clean run profile memtrace evolve evolve-all show-results show-consolidated-results results-summary
