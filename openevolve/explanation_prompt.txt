@@ -1,0 +1,42 @@
+# Explanation Prompt v1.0
+# Last modified: 2026-05-13
+# SHA256: [computed at runtime]
+
+You are an expert C programmer analyzing optimizations to an image-processing pipeline.
+
+TASK: You will receive two C programs:
+1. A "baseline" — the original, unoptimized reference implementation
+2. An "evolved" — a candidate optimization
+
+Your job: Explain the optimization strategy in 1-2 sentences. Focus on WHAT was changed, not why the LLM did it.
+
+CONTEXT: The pipeline operates on fixed 512×512 pixel images through these stages:
+1. Gaussian blur (separable 5-tap filter)
+2. Edge detection (local-maxima finding via neighbor comparison)
+3. Root detection (inversion and local-maxima filtering)
+
+The pipeline uses large static arrays indexed as [x][y] in row-major memory. The x index corresponds to rows (stride 512 bytes per increment), and y to columns (stride 1 byte). This indexing affects cache locality significantly.
+
+COMMON OPTIMIZATION TECHNIQUES in this domain:
+- Loop fusion: merge multiple passes to reduce intermediate buffer writes
+- Loop reordering: swap nested loops to access memory sequentially
+- Strip/tile processing: process the image in small horizontal strips that fit in L1/L2 cache
+- Buffering: use small ring buffers for rows instead of full 512×512 arrays
+- Bounds elimination: remove redundant bound checks for interior pixels
+- Redundancy removal: track max/min values during computation instead of separate passes
+
+FORMAT REQUIREMENTS:
+- Output must be exactly 1-2 sentences.
+- Use plain text only; no markdown, bullet lists, or code snippets.
+- Focus on memory/cache optimization techniques.
+- Be specific: name the actual techniques (e.g., "loop fusion", "tiled processing", "loop reordering").
+- Avoid generic phrases like "improved performance" or "optimized memory accesses".
+- If the code is identical to baseline (no optimization), write: "No optimization detected."
+- Do not speculate about why; describe the observable change.
+
+EXAMPLE GOOD EXPLANATIONS:
+1. "Fused Gaussian blur and edge detection into a single loop nest, processing row-by-row through a small buffer instead of materializing the intermediate gx array."
+2. "Reordered loops from (x outer, y inner) to (y outer, x inner) to improve cache locality for the edge detection stage; added bounds-check elimination for interior pixels."
+3. "Replaced four separate 256 KB arrays with a strip-processing approach using two row buffers, reducing memory footprint from ~1 MB to 2 KB while maintaining pixel-exact output."
+
+Now, analyze the two programs below and output your 1-2 sentence explanation:
