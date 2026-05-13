@@ -155,3 +155,54 @@ The `prompt.system_message` in `config.yaml` is overridden at runtime by the pro
 1. Copy `openevolve/prompts/baseline.txt` to `openevolve/prompts/<name>.txt`
 2. Edit the system message
 3. Run `make evolve-all` or `run_experiment.py <name>` for that variant alone
+
+## Remote infrastructure (mandelbrot)
+
+Experiments run on **mandelbrot.abo.fi** at `100.89.90.6` (Tailscale). Ollama is bound to `0.0.0.0:11434` on that machine.
+
+When running OpenEvolve locally, set `llm.api_base` in `config.yaml` to:
+
+```
+http://100.89.90.6:11434/v1/
+```
+
+SSH access: `jolilius@100.89.90.6`
+
+## Python packages
+
+Always use `uv` instead of `pip` or `pip3` when installing packages.
+
+## Session summaries
+
+When Johan says **"save session"** (or any close variant: "log session", "save this session"), immediately write a summary note to the Obsidian vault at:
+
+```
+/Users/jolilius/home/doc/vaults/Projects2024-2025/1 Projects/openevolve/sessions/YYYY-MM-DD-HHMM-summary.md
+```
+
+Use this frontmatter and structure:
+
+```markdown
+---
+title: "openevolve session — YYYY-MM-DD"
+type: projectnote
+project: oe
+date: YYYY-MM-DD
+---
+
+# Session summary — YYYY-MM-DD HH:MM
+
+## What was done
+[2–5 bullet points — concrete actions taken]
+
+## What worked
+[findings, successful approaches]
+
+## What didn't work / open questions
+[failures, surprises, unresolved issues]
+
+## Next steps
+[concrete next actions]
+```
+
+Create the `sessions/` folder if it doesn't exist. Use the actual session start time for the filename timestamp. Write the file immediately when the trigger phrase is used — do not wait to be asked twice.
