@@ -179,19 +179,7 @@ evolve-explain-test:
 	@echo "  make show-consolidated-results"
 
 show-explanations:
-	$(OPENEVOLVE_PYTHON) -c " \
-	  import sys; sys.path.insert(0, 'openevolve'); \
-	  from results_loader import load_all_results; \
-	  df = load_all_results(); \
-	  if len(df) > 0: \
-	    if 'explanation' in df.columns: \
-	      explained = df[df['explanation'].notna()][['iteration', 'prompt', 'improvement_percent', 'explanation']]; \
-	      print(explained.to_string(index=False)); \
-	    else: \
-	      print('No explanation column found in results'); \
-	  else: \
-	    print('No results loaded'); \
-	"
+	$(OPENEVOLVE_PYTHON) -c "import sys; sys.path.insert(0, 'openevolve'); from results_loader import load_all_results; df = load_all_results(); import pandas as pd; print(df[df['explanation'].notna()][['iteration', 'prompt', 'improvement_percent', 'explanation']].to_string(index=False) if len(df) > 0 and 'explanation' in df.columns else 'No results or no explanation column found')"
 
 test-explanations-disabled:
 	@echo "Testing with EXPLAIN_GENERATIONS=0..."
