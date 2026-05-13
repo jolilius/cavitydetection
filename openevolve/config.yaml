@@ -19,7 +19,7 @@ llm:
   primary_model_weight: 0.6
   secondary_model: "qwen2.5-coder:32b"
   secondary_model_weight: 0.4
-  api_base: "http://localhost:11434/v1/"
+  api_base: "http://100.89.90.6:11434/v1/"
   api_key: "ollama"
   temperature: 0.8
   top_p: 0.95

@@ -90,7 +90,9 @@
       "Bash(gh issue create --title 'Update Makefile for consolidated results targets' --body 'Add new Makefile targets for unified results display. *)",
       "Bash(gh issue create --title 'End-to-end testing and validation' --body 'Run full experiment workflow and verify all results are properly consolidated. *)",
       "Bash(gh issue create --title 'Final commit and cleanup' --body 'Finalize Phase 1: clean up, commit, and prepare for Phase 2. *)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(python3 /tmp/test_phase1_fixed.py)",
+      "Bash(python3 -m pip install --user pandas -q)"
     ]
   }
 }

@@ -19,9 +19,13 @@ import tempfile
 
 import yaml
 
-from .consolidate_results import consolidate_experiment
-
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+
+# Import consolidation module (handle both direct script and module imports)
+try:
+    from consolidate_results import consolidate_experiment
+except ImportError:
+    from .consolidate_results import consolidate_experiment
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENEVOLVE   = os.path.join(PROJECT_ROOT, "..", "openevolve")
 
