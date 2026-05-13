@@ -163,6 +163,11 @@ def load_results(filepath: str) -> pd.DataFrame:
     df["baseline_accesses"] = baseline_metrics.get("memory_accesses", 128_862_705)
     df["program"] = metadata.get("program", "unknown")
 
+    # Ensure explanation column exists (for backward compatibility with Phase 1 results)
+    # Phase 1 results don't have explanation field, so fill with NaN
+    if "explanation" not in df.columns:
+        df["explanation"] = pd.NA
+
     # Reorder columns: iteration, prompt, memory_accesses first; metadata last
     primary_cols = [
         "iteration",

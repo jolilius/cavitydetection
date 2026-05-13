@@ -5,6 +5,13 @@ Test consolidation pipeline: synthetic OpenEvolve output → JSON → DataFrame.
 Creates minimal synthetic best_program_info.json structure, runs consolidation,
 validates output structure, and loads into pandas to verify roundtrip integrity.
 
+Includes tests for explanation field handling (Phase 2+):
+- Consolidation with explanations
+- Backward compatibility (no explanations)
+- Partial explanations (some iterations have explanations, some don't)
+- DataFrame loading with explanations
+- Phase 1 results (no explanation field)
+
 Usage:
     python openevolve/test_consolidation.py
 """
@@ -140,9 +147,253 @@ def test_consolidation():
         return True
 
 
+def test_consolidate_with_explanations():
+    """Test that consolidation correctly stores explanations in results."""
+    from consolidate_results import consolidate_experiment
+    from results_loader import load_results
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic best_program_info.json
+        best_dir = os.path.join(tmpdir, "best")
+        os.makedirs(best_dir)
+
+        synthetic_best = {
+            "iteration": 42,
+            "metrics": {
+                "mem_score": 1.25,
+                "combined_score": 1.25,
+            },
+            "timestamp": "2026-05-13T14:00:00Z",
+            "runtime_seconds": 15.5,
+        }
+
+        best_path = os.path.join(best_dir, "best_program_info.json")
+        with open(best_path, "w") as f:
+            json.dump(synthetic_best, f)
+
+        # Consolidate with explanations
+        explanations = {
+            42: "Reordered loops to improve cache locality"
+        }
+
+        result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
+
+        # Verify explanation is in result
+        assert result['iterations'][0].get('explanation') == "Reordered loops to improve cache locality"
+        print("✓ test_consolidate_with_explanations passed")
+
+
+def test_consolidate_without_explanations():
+    """Test that consolidation works without explanations (Phase 1 compat)."""
+    from consolidate_results import consolidate_experiment
+    from results_loader import load_results
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic best_program_info.json
+        best_dir = os.path.join(tmpdir, "best")
+        os.makedirs(best_dir)
+
+        synthetic_best = {
+            "iteration": 25,
+            "metrics": {
+                "mem_score": 1.15,
+                "combined_score": 1.15,
+            },
+            "timestamp": "2026-05-13T14:00:00Z",
+            "runtime_seconds": 15.5,
+        }
+
+        best_path = os.path.join(best_dir, "best_program_info.json")
+        with open(best_path, "w") as f:
+            json.dump(synthetic_best, f)
+
+        # Consolidate without explanations
+        result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=None)
+
+        # Verify no explanation field in result
+        for iter_record in result['iterations']:
+            assert 'explanation' not in iter_record or iter_record.get('explanation') is None
+        print("✓ test_consolidate_without_explanations passed")
+
+
+def test_consolidate_partial_explanations():
+    """Test that only present explanations are included."""
+    from consolidate_results import consolidate_experiment
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic best_program_info.json
+        best_dir = os.path.join(tmpdir, "best")
+        os.makedirs(best_dir)
+
+        # Create synthetic best data with iteration 5
+        synthetic_best = {
+            "iteration": 5,
+            "metrics": {
+                "mem_score": 1.10,
+                "combined_score": 1.10,
+            },
+            "timestamp": "2026-05-13T14:00:00Z",
+            "runtime_seconds": 15.5,
+        }
+
+        best_path = os.path.join(best_dir, "best_program_info.json")
+        with open(best_path, "w") as f:
+            json.dump(synthetic_best, f)
+
+        # Explanations for iteration 5 and some other iteration (won't be used)
+        explanations = {
+            5: "Refined approach",
+            1: "First attempt",  # This won't be used since only iteration 5 is in result
+        }
+
+        result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
+
+        # Verify iteration 5 has explanation
+        result_dict = {it['iteration']: it for it in result['iterations']}
+        assert result_dict[5].get('explanation') == "Refined approach"
+
+        # Verify iteration 5 is the only iteration
+        assert len(result_dict) == 1
+        print("✓ test_consolidate_partial_explanations passed")
+
+
+def test_load_results_with_explanations():
+    """Test that load_results() correctly loads explanation column."""
+    from results_loader import load_results
+    import pandas as pd
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic results.json with explanations
+        results = {
+            "metadata": {
+                "program": "cavitydetection",
+                "prompt_variant": "test",
+                "timestamp": "2026-05-13T14:00:00Z",
+                "llm_model": "test-model",
+                "total_iterations": 2,
+                "total_runtime_seconds": 30.0,
+                "best_memory_accesses": 126500000,
+                "convergence_iteration": 1,
+                "explanation_config": {
+                    "enabled": True,
+                    "prompt_file": "explanation_prompt.txt",
+                    "prompt_version": "1.0",
+                    "prompt_hash": "abc123",
+                    "prompt_changed_after_run": False,
+                }
+            },
+            "baseline_metrics": {
+                "memory_accesses": 128862705,
+                "memory_reads": 64431352,
+                "memory_writes": 64431353,
+            },
+            "iterations": [
+                {
+                    "iteration": 1,
+                    "memory_accesses": 127000000,
+                    "memory_reads": 63500000,
+                    "memory_writes": 63500000,
+                    "improvement_percent": 1.45,
+                    "iteration_runtime_seconds": 12.3,
+                    "mem_score": 1.0148,
+                    "explanation": "Test explanation 1"
+                },
+                {
+                    "iteration": 2,
+                    "memory_accesses": 126500000,
+                    "memory_reads": 63250000,
+                    "memory_writes": 63250000,
+                    "improvement_percent": 1.95,
+                    "iteration_runtime_seconds": 12.8,
+                    "mem_score": 1.0198,
+                    # No explanation for iteration 2
+                }
+            ]
+        }
+
+        results_file = os.path.join(tmpdir, "results.json")
+        with open(results_file, "w") as f:
+            json.dump(results, f)
+
+        df = load_results(results_file)
+
+        # Verify DataFrame has explanation column
+        assert 'explanation' in df.columns
+        assert df.iloc[0]['explanation'] == "Test explanation 1"
+        assert pd.isna(df.iloc[1]['explanation'])
+        print("✓ test_load_results_with_explanations passed")
+
+
+def test_load_phase1_results():
+    """Test loading Phase 1 results (no explanation field)."""
+    from results_loader import load_results
+    import pandas as pd
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create Phase 1 results.json (no explanation field)
+        results = {
+            "metadata": {
+                "program": "cavitydetection",
+                "prompt_variant": "baseline",
+                "timestamp": "2026-05-13T14:00:00Z",
+                "llm_model": "test-model",
+                "total_iterations": 1,
+                "total_runtime_seconds": 15.0,
+                "best_memory_accesses": 127000000,
+                "convergence_iteration": 1,
+                "explanation_config": {
+                    "enabled": False
+                }
+            },
+            "baseline_metrics": {
+                "memory_accesses": 128862705,
+                "memory_reads": 64431352,
+                "memory_writes": 64431353,
+            },
+            "iterations": [
+                {
+                    "iteration": 1,
+                    "memory_accesses": 127000000,
+                    "memory_reads": 63500000,
+                    "memory_writes": 63500000,
+                    "improvement_percent": 1.45,
+                    "iteration_runtime_seconds": 12.3,
+                    "mem_score": 1.0148,
+                    # No explanation field
+                }
+            ]
+        }
+
+        results_file = os.path.join(tmpdir, "results.json")
+        with open(results_file, "w") as f:
+            json.dump(results, f)
+
+        df = load_results(results_file)
+
+        # Verify explanation column exists but is NaN for Phase 1 results
+        assert 'explanation' in df.columns
+        assert pd.isna(df.iloc[0]['explanation'])
+        print("✓ test_load_phase1_results passed")
+
+
 if __name__ == "__main__":
     try:
+        # Run main consolidation test
         success = test_consolidation()
+
+        # Run explanation-specific tests
+        print("\n" + "="*60)
+        print("Running explanation field tests (Phase 2+)")
+        print("="*60)
+        test_consolidate_with_explanations()
+        test_consolidate_without_explanations()
+        test_consolidate_partial_explanations()
+        test_load_results_with_explanations()
+        test_load_phase1_results()
+
+        print("\n" + "="*60)
+        print("✅ All explanation tests passed")
+        print("="*60)
         sys.exit(0 if success else 1)
     except Exception as e:
         print(f"\n❌ Test failed: {e}", file=sys.stderr)
