@@ -219,6 +219,45 @@ the bare `make evolve` command.
 
 ---
 
+## Phase 2: LLM Explanations (COMPLETE)
+
+Experiments now capture LLM-generated explanations for each iteration, describing the optimization strategy employed by the LLM.
+
+**Features:**
+- Automatic explanation generation for code transformations
+- Explanations stored in results.json and accessible via pandas DataFrame
+- Optional: disable with `EXPLAIN_GENERATIONS=0` if LLM is unavailable
+- Non-blocking: experiments succeed even if explanation generation fails
+
+**Usage:**
+```python
+from openevolve.results_loader import load_all_results
+df = load_all_results()
+
+# View explanations alongside results
+explained = df[df['explanation'].notna()]
+print(explained[['iteration', 'prompt', 'improvement_percent', 'explanation']])
+```
+
+See `.planning/RESULTS_USAGE.md` for detailed explanation analysis examples.
+
+### Quick Start: Testing with Explanations
+
+Test explanation generation with a 10-iteration run:
+```bash
+make evolve-explain-test    # Run baseline prompt with explanations
+make show-explanations      # View results with explanations
+```
+
+Disable explanations if LLM is unavailable:
+```bash
+EXPLAIN_GENERATIONS=0 make evolve-all
+```
+
+See `.planning/RESULTS_FORMAT.md` for the unified results schema and explanation field documentation.
+
+---
+
 ## The detection pipeline
 
 All stages operate on `unsigned char image[512][512]` arrays (`N = M = 512`).
