@@ -1,0 +1,11 @@
+- As a researcher I want to investigate the use of openevolve to optimize code. There are a number of research questions that drive this inquiry, more will appear as the investigation proceeds.
+	- RQ1: How good is openevolve at minimizing memory accesses? Later on this metric might change.
+	- RQ2: How does the prompt influence the searc?  How quickly is an optimum found, how good is the optimum compared to other prompts
+	- RQ3: What program transforations does openevolve try at each iteration? This question attempts to understand how much compiler theory the model knows.
+- Therefore as a reseacher I want in the system to support me in anwer these questions. In more detail, I've identified the following user stories.
+- As a  researcher I want all experiments to always run with the same llm model (I actually don't understand why there are 2 models) so that I can compare results between models
+- As a researcher I want to know the hardware configuration and the operating system for each experiment
+- As a reaseacher I want to be able to know different values of the program: now memory accesses with llvm split into read and write, later on I might want to have valgrind, energy, runtime,  and other metrics. I will keep a separate list of these.
+- As a researcher I want to understand for each program that has been created an explanation for the optimisation that has been tried.
+- As a researcher I want for each experiment to log the total runtime, the number of iterations, the runtime of each iteration, so that I can compare the overall efficiency of prompts and 
+- As a researcher I want the results to be stored in an easy text based format so that the data is easy to treat

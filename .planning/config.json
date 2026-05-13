@@ -1,0 +1,29 @@
+{
+  "project_name": "Cavity Detection OpenEvolve Framework",
+  "workflow": {
+    "mode": "structured",
+    "phases_per_milestone": 4,
+    "use_agents": true,
+    "track_state": true
+  },
+  "timeline": {
+    "milestone_duration_days": 7,
+    "current_milestone": 1,
+    "start_date": "2026-05-13"
+  },
+  "collaboration": {
+    "owner": "johan.lilius@gmail.com",
+    "reviewers": [],
+    "mode": "solo"
+  },
+  "quality_gates": {
+    "require_tests": false,
+    "require_review": false,
+    "require_verification": true
+  },
+  "defaults": {
+    "commit_atomicity": true,
+    "auto_state_updates": true,
+    "verbose_logging": true
+  }
+}
