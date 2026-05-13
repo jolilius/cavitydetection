@@ -80,7 +80,17 @@
       "Bash(git *)",
       "Bash(mkdir -p /home/jolilius/home/src/cavitydetection/.claude/memory)",
       "Bash(cp /home/jolilius/.claude/projects/-home-jolilius-home-src-cavitydetection/memory/MEMORY.md /home/jolilius/home/src/cavitydetection/.claude/memory/)",
-      "Bash(cp /home/jolilius/.claude/projects/-home-jolilius-home-src-cavitydetection/memory/feedback_use_uv.md /home/jolilius/home/src/cavitydetection/.claude/memory/)"
+      "Bash(cp /home/jolilius/.claude/projects/-home-jolilius-home-src-cavitydetection/memory/feedback_use_uv.md /home/jolilius/home/src/cavitydetection/.claude/memory/)",
+      "Skill(gsd-new-project)",
+      "Bash(gh milestone *)",
+      "Bash(gh issue create --title 'Implement consolidate_results.py module' --body 'Create `openevolve/consolidate_results.py` module that transforms OpenEvolve output into unified JSON format. *)",
+      "Bash(gh issue create --title 'Implement results_loader.py for pandas integration' --body 'Create `openevolve/results_loader.py` module for loading consolidated results into pandas DataFrames. *)",
+      "Bash(gh issue create --title 'Integrate consolidation into run_experiment.py' --body 'Modify `openevolve/run_experiment.py` to call consolidation after each experiment completes. *)",
+      "Bash(gh issue create --title 'Document results format and usage' --body 'Create comprehensive usage guide for researchers analyzing consolidated results. *)",
+      "Bash(gh issue create --title 'Update Makefile for consolidated results targets' --body 'Add new Makefile targets for unified results display. *)",
+      "Bash(gh issue create --title 'End-to-end testing and validation' --body 'Run full experiment workflow and verify all results are properly consolidated. *)",
+      "Bash(gh issue create --title 'Final commit and cleanup' --body 'Finalize Phase 1: clean up, commit, and prepare for Phase 2. *)",
+      "Bash(gh issue *)"
     ]
   }
 }
