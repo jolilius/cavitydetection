@@ -29,7 +29,8 @@ The results file has three top-level sections: `metadata`, `baseline_metrics`, a
     "total_iterations": "integer", // Number of iterations completed
     "total_runtime_seconds": "number", // Total wall-clock time for experiment
     "best_memory_accesses": "integer", // Memory accesses in best solution found
-    "convergence_iteration": "integer" // Iteration number when best was first found
+    "convergence_iteration": "integer", // Iteration number when best was first found
+    "explanation_config": {object}  // Metadata about LLM explanations (see section below)
   }
 }
 ```
@@ -63,6 +64,29 @@ The results file has three top-level sections: `metadata`, `baseline_metrics`, a
 
 The split between reads and writes is derived from the baseline and applies uniformly to all iterations.
 
+### Explanation Config Section
+
+```json
+{
+  "explanation_config": {
+    "enabled": boolean,             // Whether explanations were generated
+    "prompt_file": "string",        // Source prompt file name (if enabled)
+    "prompt_version": "string",     // Semantic version of prompt (e.g., "1.0")
+    "prompt_hash": "string",        // SHA256 (first 16 chars) for change detection
+    "prompt_changed_after_run": boolean  // True if prompt was modified after experiment
+  }
+}
+```
+
+**Field Definitions:**
+- `enabled`: Boolean flag indicating whether LLM explanations were generated for this experiment
+- `prompt_file`: Source filename for reference (always "explanation_prompt.txt" if enabled)
+- `prompt_version`: Semantic version of the explanation prompt used (e.g., "1.0", "1.1", "2.0")
+- `prompt_hash`: SHA256 hash (first 16 hexadecimal characters) of the prompt text; enables detection if prompt file was modified
+- `prompt_changed_after_run`: Boolean flag set to true if the prompt file was modified after the experiment completed (data integrity warning)
+
+When `enabled` is false (no explanations generated), only the `enabled` field is present.
+
 ### Iterations Array
 
 ```json
@@ -75,7 +99,8 @@ The split between reads and writes is derived from the baseline and applies unif
       "memory_writes": 63500000,
       "improvement_percent": 1.45,
       "iteration_runtime_seconds": 12.3,
-      "mem_score": 1.0148
+      "mem_score": 1.0148,
+      "explanation": "Reordered loops to improve cache locality..."
     },
     {
       "iteration": 2,
@@ -90,6 +115,8 @@ The split between reads and writes is derived from the baseline and applies unif
 }
 ```
 
+Note: The `explanation` field is optional and present only if explanations were generated for that iteration.
+
 **Field Definitions:**
 
 | Field | Type | Description |
@@ -101,6 +128,8 @@ The split between reads and writes is derived from the baseline and applies unif
 | `improvement_percent` | float | Percentage reduction vs baseline: `(baseline - accesses) / baseline * 100` |
 | `iteration_runtime_seconds` | float | Wall-clock time spent evaluating this iteration candidate (seconds) |
 | `mem_score` | float | Memory score: `baseline / accesses` (>1.0 means better than baseline) |
+| `explanation` | string (optional) | LLM-generated description of optimization strategy; omitted if not available |
+| `prompt_version` | string (optional) | Version of explanation prompt used; present if explanation field exists |
 
 ## Derived Fields
 
@@ -140,7 +169,7 @@ memory_writes = memory_accesses / 2 (rounded up if total is odd)
 
 This is a placeholder for Phase 2, which may extract actual read/write counts from LLVM instrumentation.
 
-## Complete Example JSON (Minimal Valid)
+## Complete Example JSON (With Explanations)
 
 ```json
 {
@@ -152,7 +181,60 @@ This is a placeholder for Phase 2, which may extract actual read/write counts fr
     "total_iterations": 42,
     "total_runtime_seconds": 480.5,
     "best_memory_accesses": 98765432,
-    "convergence_iteration": 28
+    "convergence_iteration": 28,
+    "explanation_config": {
+      "enabled": true,
+      "prompt_file": "explanation_prompt.txt",
+      "prompt_version": "1.0",
+      "prompt_hash": "a3b2c1f5e8d9a2b3",
+      "prompt_changed_after_run": false
+    }
+  },
+  "baseline_metrics": {
+    "memory_accesses": 128862705,
+    "memory_reads": 64431352,
+    "memory_writes": 64431353
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "memory_accesses": 127000000,
+      "memory_reads": 63500000,
+      "memory_writes": 63500000,
+      "improvement_percent": 1.45,
+      "iteration_runtime_seconds": 12.3,
+      "mem_score": 1.0148,
+      "explanation": "Reordered loops from (x outer, y inner) to (y outer, x inner) to improve cache locality."
+    },
+    {
+      "iteration": 2,
+      "memory_accesses": 126500000,
+      "memory_reads": 63250000,
+      "memory_writes": 63250000,
+      "improvement_percent": 1.95,
+      "iteration_runtime_seconds": 12.8,
+      "mem_score": 1.0198
+    }
+  ]
+}
+```
+
+## Complete Example JSON (No Explanations — Backward Compatible)
+
+```json
+{
+  "metadata": {
+    "program": "cavitydetection",
+    "prompt_variant": "baseline",
+    "timestamp": "2026-05-13T14:30:00Z",
+    "llm_model": "qwen2.5-coder:32b",
+    "total_iterations": 42,
+    "total_runtime_seconds": 480.5,
+    "best_memory_accesses": 98765432,
+    "convergence_iteration": 28,
+    "explanation_config": {
+      "enabled": false
+    }
   },
   "baseline_metrics": {
     "memory_accesses": 128862705,
@@ -218,6 +300,34 @@ The `mem_score` field is derived from the baseline and memory_accesses to mainta
 3. **Per-iteration data:** If OpenEvolve outputs per-iteration checkpoints, consolidate reads all; if only the best is available (fallback), create a synthetic single-iteration record
 4. **Timestamps in UTC:** All `timestamp` and `iteration_runtime_seconds` are in UTC or wall-clock seconds (not CPU time)
 5. **Immutable after creation:** Results files are written once at experiment end; not updated by subsequent experiments
+
+## Prompt Reproducibility & Versioning
+
+When LLM explanations are enabled, the `explanation_config` metadata section ensures reproducibility:
+
+### Version Tracking
+- `prompt_version`: Semantic versioning (e.g., "1.0", "1.1", "2.0") tracks prompt evolution
+- `prompt_hash`: SHA256 digest (first 16 chars) of prompt text enables change detection
+- **Comparison across versions**: Filter results by `prompt_version` to compare explanation quality across prompt iterations
+- **Safety**: Old and new results coexist; changing the prompt does not invalidate past results
+
+### Change Detection
+- If `prompt_hash` differs from the current `explanation_prompt.txt`, the prompt has been modified
+- Set `prompt_changed_after_run` to true if modification detected after experiment completion (data integrity warning)
+
+### Iteration Workflow
+When the explanation prompt is updated:
+
+1. Edit `explanation_prompt.txt`
+2. Increment `prompt_version` in the file header
+3. Commit to git with message: `prompt(02-llm): bump explanation prompt to v{version}`
+4. Re-run experiments to capture explanations with new prompt version
+5. Compare old vs new results: filter by `prompt_version` field in pandas
+
+### Guidance for Analysis
+- **Explanation quality analysis**: Group results by `prompt_version`; compare descriptions for style/accuracy changes
+- **Version stability**: Expect mostly similar explanations for minor bumps (v1.0 → v1.1)
+- **Major rewrites**: Major version bumps (v1.0 → v2.0) indicate conceptual changes; results not directly comparable
 
 ## Migration & Version Control
 

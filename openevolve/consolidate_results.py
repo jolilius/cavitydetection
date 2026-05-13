@@ -18,6 +18,7 @@ Usage:
     # result is written to {output_dir}/results.json
 """
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -29,6 +30,9 @@ def consolidate_experiment(
     program: str = "cavitydetection",
     prompt_variant: Optional[str] = None,
     baseline_accesses: int = 128_862_705,
+    explanations: Optional[dict] = None,
+    explanation_prompt_text: Optional[str] = None,
+    prompt_version: str = "1.0",
 ) -> dict:
     """
     Consolidate one experiment's results from OpenEvolve output_dir into unified JSON.
@@ -41,6 +45,9 @@ def consolidate_experiment(
         program: Program name (default "cavitydetection")
         prompt_variant: Prompt name; if None, derives from output_dir basename
         baseline_accesses: Reference baseline memory accesses (default 128,862,705)
+        explanations: Optional dict mapping iteration number -> explanation text
+        explanation_prompt_text: Optional prompt text for SHA256 hashing and reproducibility
+        prompt_version: Semantic version of explanation prompt (default "1.0")
 
     Returns:
         Dictionary matching RESULTS_FORMAT.md schema:
@@ -77,7 +84,9 @@ def consolidate_experiment(
     }
 
     # Extract iteration history
-    iterations = _extract_iterations(output_dir, best_info, baseline_accesses)
+    iterations = _extract_iterations(
+        output_dir, best_info, baseline_accesses, explanations
+    )
 
     # Determine convergence metrics
     convergence_iteration = 1
@@ -104,6 +113,12 @@ def consolidate_experiment(
         "best_memory_accesses": best_memory_accesses,
         "convergence_iteration": convergence_iteration,
     }
+
+    # Add explanation_config metadata
+    explanation_config = _build_explanation_config(
+        explanation_prompt_text, prompt_version
+    )
+    metadata["explanation_config"] = explanation_config
 
     # Build consolidated structure
     result = {
@@ -151,7 +166,10 @@ def _load_best_result(output_dir: str) -> dict:
 
 
 def _extract_iterations(
-    output_dir: str, best_info: dict, baseline_accesses: int
+    output_dir: str,
+    best_info: dict,
+    baseline_accesses: int,
+    explanations: Optional[dict] = None,
 ) -> list:
     """
     Extract per-iteration metrics from OpenEvolve output.
@@ -164,6 +182,7 @@ def _extract_iterations(
         output_dir: Root experiment output directory
         best_info: Dictionary from _load_best_result()
         baseline_accesses: Reference baseline
+        explanations: Optional dict mapping iteration number -> explanation text
 
     Returns:
         List of iteration dictionaries matching RESULTS_FORMAT.md schema
@@ -206,6 +225,12 @@ def _extract_iterations(
             "mem_score": round(mem_score, 4),
         }
 
+        # Add explanation if available
+        if explanations and iteration_num in explanations:
+            explanation = explanations[iteration_num]
+            if explanation is not None:
+                iteration_record["explanation"] = explanation
+
         iterations.append(iteration_record)
 
     return iterations
@@ -242,6 +267,40 @@ def _extract_llm_model(output_dir: str) -> str:
             pass
 
     return "unknown"
+
+
+def _build_explanation_config(
+    explanation_prompt_text: Optional[str], prompt_version: str
+) -> dict:
+    """
+    Build explanation_config metadata section for reproducibility.
+
+    Generates SHA256 hash of prompt text for change detection.
+    If no prompt provided, sets enabled=False.
+
+    Args:
+        explanation_prompt_text: Optional prompt text for hashing
+        prompt_version: Semantic version of prompt (e.g., "1.0")
+
+    Returns:
+        Dictionary with explanation_config structure
+    """
+
+    if explanation_prompt_text is None:
+        return {
+            "enabled": False,
+        }
+
+    # Compute prompt hash (first 16 characters of SHA256)
+    prompt_hash = hashlib.sha256(explanation_prompt_text.encode()).hexdigest()[:16]
+
+    return {
+        "enabled": True,
+        "prompt_file": "explanation_prompt.txt",
+        "prompt_version": prompt_version,
+        "prompt_hash": prompt_hash,
+        "prompt_changed_after_run": False,
+    }
 
 
 if __name__ == "__main__":
