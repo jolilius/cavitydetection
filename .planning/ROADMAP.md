@@ -1,89 +1,111 @@
-# Multi-Program OpenEvolve Research Framework — Roadmap
+# OpenEvolve Results & Explanations Framework — Roadmap
 
-**Goal:** Build a research instrumentation framework supporting multi-program OpenEvolve experiments with flexible metrics, LLM-generated explanations, and reproducible result tracking.
+**Goal:** Consolidate experiment results into a unified format; capture LLM explanations of transformations.
+
+**Research Focus:** Understand how prompts influence search behavior (convergence speed, quality, strategy).
 
 **Timeline:** 1 week (2026-05-13 to 2026-05-19)
 
 ---
 
-## Phase 1: Framework Architecture & Multi-Program Support
-**Goal:** Refactor to support multiple test programs; establish config structure.
+## Phase 1: Results Consolidation (Days 1-3)
+**Status:** Ready to start  
+**Success:** Consolidated results loaded into pandas; convergence visible
 
-**Deliverables:**
-- [ ] Multi-program config system (YAML defining programs, baseline metrics, evaluators)
-- [ ] Abstract program interface (path to seed, evaluator, baseline access count)
-- [ ] Refactor `run_experiment.py` to iterate over configured programs
-- [ ] Add cavitydetection and loopoptimization1 as registered programs
-- [ ] Single `make evolve-all` runs all prompts on all programs
+### Deliverables
+- [ ] Define unified results schema (JSON structure for all metrics, iterations, metadata)
+- [ ] Refactor `run_experiment.py` to output consolidated results per experiment
+- [ ] Implement pandas loader: `load_results(path) → DataFrame`
+- [ ] Update `make evolve-all` to aggregate results (or keep per-prompt JSON, pre-aggregate)
+- [ ] Test on existing cavitydetection experiments
 
-**Success Metrics:**
-- One prompt variant successfully runs on both cavitydetection and loopoptimization1
-- Config is human-readable and extensible
-- No hardcoded program paths in Python
+### Results Schema (JSON)
+```json
+{
+  "metadata": {
+    "program": "cavitydetection",
+    "prompt": "baseline",
+    "timestamp": "2026-05-13T10:30:00Z",
+    "total_iterations": 42,
+    "total_seconds": 480,
+    "convergence_iteration": 28
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "memory_reads": 123456,
+      "memory_writes": 654321,
+      "timing_seconds": 12.5,
+      "baseline_accesses": 128862705
+    }
+  ]
+}
+```
 
----
-
-## Phase 2: Instrumentation & Results Tracking
-**Goal:** Capture hardware, OS, model, explanations; store results in machine-readable format.
-
-**Deliverables:**
-- [ ] Metadata collection: capture hardware config (CPU, RAM), OS, LLM model name, timestamp
-- [ ] Modify evaluator to log: total runtime, iteration count, per-iteration timing
-- [ ] Integrate LLM explanation prompting: after each iteration, ask model to explain the transformation
-- [ ] Results schema (JSON structure for: program, prompt, iteration, code, explanation, metrics, timing)
-- [ ] Results storage to flat files (one JSON per experiment run)
-
-**Success Metrics:**
-- Sample result file shows all metadata, explanations, and timing
-- Results are grep-able and importable to analysis tools (Python, R, etc.)
-- Can compare iteration timing across prompts
-
----
-
-## Phase 3: Metric Plugin System
-**Goal:** Design and build plugin architecture; implement memory-access plugin.
-
-**Deliverables:**
-- [ ] Plugin interface design (input: candidate code; output: metric value + explanation)
-- [ ] Plugin discovery (auto-load from `metrics/` directory)
-- [ ] Memory plugin implementation (wrap existing LLVM instrumentation)
-- [ ] Config extension: specify which metrics to run per program
-- [ ] Skeleton for future metrics (valgrind, energy, runtime)
-
-**Success Metrics:**
-- Memory metric plugin runs and reports read/write accesses correctly
-- New metric can be added by dropping a script in `metrics/` and updating config
-- Multiple metrics can run on same candidate in parallel (or sequential, depending on cost)
+### Definition of Done
+- ✅ Existing experiment runs produce unified JSON
+- ✅ `pd.read_json(results.json)` works (or custom loader if needed)
+- ✅ Can plot convergence curves: iteration vs memory accesses, colored by prompt
+- ✅ README documents results format and loader usage
 
 ---
 
-## Phase 4: Validation & Polish
-**Goal:** End-to-end testing; document setup and usage.
+## Phase 2: LLM Explanations (Days 4-6)
+**Status:** Blocked until Phase 1 complete  
+**Success:** Explanations captured and visible in results; prompt strategies understood
 
-**Deliverables:**
-- [ ] Run full experiment: 1 prompt variant across 2 programs, 20 iterations, all metrics
-- [ ] Verify results match expected baseline values
-- [ ] Documentation: README for experiment setup, config reference, adding new programs/metrics
-- [ ] Cleanup and repo commit
+### Deliverables
+- [ ] Design explanation prompt: "Explain transformations in [code] vs baseline"
+- [ ] Integrate explanation capture into `run_experiment.py` post-iteration
+- [ ] Extend results schema to include `explanation` field
+- [ ] Update pandas loader to expose explanations
+- [ ] Test on 1-2 prompt variants (short run, e.g., 10 iterations)
 
-**Success Metrics:**
-- All RQs can be partially answered from results (prompt influence visible, transformations logged, memory minimization measurable)
-- New contributor can add a program in <30 min
-- Experiment results are reproducible across runs
+### Updated Results Schema
+```json
+{
+  "iterations": [
+    {
+      "iteration": 1,
+      "memory_reads": 123456,
+      "memory_writes": 654321,
+      "timing_seconds": 12.5,
+      "explanation": "Reordered loops to improve cache locality; adjacent memory accesses now sequential"
+    }
+  ]
+}
+```
+
+### Definition of Done
+- ✅ Explanations are concise (1-2 sentences) and relevant
+- ✅ Can read explanations from DataFrame: `df['explanation']`
+- ✅ Iteration timing includes explanation generation (acceptable overhead?)
+- ✅ README documents explanation prompting and interpretation
+
+---
+
+## Phase 3+: Future (Optional)
+**Status:** Defer to next milestone  
+
+### Possible next steps (not committed to):
+- **Multi-program support:** Run same prompts on other algorithms
+- **Metric plugins:** Add valgrind, energy, runtime measurements
+- **Explanation grouping:** Cluster iterations by transformation type
+- **Results visualization:** Generate convergence plots, strategy heatmaps
 
 ---
 
 ## Dependency Graph
 
 ```
-Phase 1 (Framework) 
+Phase 1 (Results consolidation)
   ↓ (required by)
-Phase 2 (Instrumentation) ← Phase 3 (Metrics) can start in parallel
+Phase 2 (LLM explanations)
   ↓
-Phase 4 (Validation)
+Phase 3+ (optional future work)
 ```
 
-**Parallel opportunity:** Phase 3 plugin design can start during Phase 1, but implementation depends on Phase 2 results structure.
+**No parallel work:** Phase 2 depends on Phase 1 results schema being final.
 
 ---
 
@@ -91,16 +113,52 @@ Phase 4 (Validation)
 
 | Risk | Mitigation |
 |------|-----------|
-| LLM explanation prompting is slow/unreliable | Start with baseline prompt; iterate; fallback to manual annotation |
-| Plugin system over-engineered for timeline | MVP: simple script-per-metric; refactor to framework if time permits |
-| Multiple programs have different baselines | Record per-program baseline in config; normalize in analysis |
+| Explanation generation is slow (>2s/iter) | Monitor timing; accept 1-2s overhead for now; optimize prompt if needed |
+| LLM explanations are incoherent/vague | Iterate prompt; fallback to showing code diffs only |
+| Results format change mid-phase | Lock schema after Phase 1 complete; backfill if needed |
+| Existing experiments need re-run | Keep old results for reference; use consolidated format going forward |
 
 ---
 
 ## Success Definition
 
-- ✅ Multi-program framework working for ≥2 programs
-- ✅ One experiment run produces: metadata, per-iteration explanations, metrics, timing
-- ✅ Results stored as text files; easy to analyze
-- ✅ Metric plugin skeleton ready; memory metric functional
-- ✅ README documents usage; ready for next researcher to extend
+✅ **Phase 1:** 
+- Consolidated results in unified format
+- Pandas loader functional
+- Convergence curves visible (iteration vs memory accesses by prompt)
+
+✅ **Phase 2:** 
+- Explanations captured for each iteration
+- Explanations are relevant and concise
+- Research questions partially answered:
+  - Prompt A converges faster than Prompt B (measurable)
+  - Different prompts find different optima (quality comparison)
+  - LLM's strategy is visible (explanation text)
+
+---
+
+## Ship Criteria
+
+**After Phase 1:** 
+- Commit consolidated results schema and loader
+- Existing experiments runnable with new format
+- Documentation complete
+
+**After Phase 2:**
+- Commit explanation integration
+- Sample results with explanations for review
+- Full documentation + interpretation guide
+
+---
+
+## Daily Standup Template
+
+```
+Date: [DATE]
+Phase: [1 or 2]
+Done: [what got done today]
+Next: [what's next]
+Blockers: [any problems?]
+Confidence: [% estimate for phase completion]
+```
+

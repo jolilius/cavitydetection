@@ -1,57 +1,76 @@
-# Multi-Program OpenEvolve Research Framework — Requirements
+# OpenEvolve Results & Explanations Framework — Requirements
 
-## Research Questions
+## Research Goal
 
-1. **RQ1:** How effective is OpenEvolve at minimizing memory accesses? (Later metrics: valgrind, energy, runtime)
-2. **RQ2:** How do different prompts influence the search? (Speed to optimum, quality, convergence behavior)
-3. **RQ3:** What program transformations does OpenEvolve attempt? (Understanding of compiler theory, optimization strategies)
+Understand how different prompts influence OpenEvolve's search behavior:
+- How quickly does each prompt converge to an optimum?
+- How good is the optimum for each prompt?
+- What is the LLM thinking at each iteration?
 
-## User Stories
+## Current State
 
-### Instrumentation & Tracking
-- As a researcher, I want all experiments to use the **same LLM model** so I can isolate prompt effects from model differences.
-- As a researcher, I want to **record hardware config and OS** for each experiment so results are reproducible and comparable.
-- As a researcher, I want **flexible metrics support** (start with memory accesses split into read/write; later add valgrind, energy, runtime) via a **plugin system** for easy extension.
-- As a researcher, I want **LLM-generated explanations** of each optimization attempt so I can understand the model's reasoning.
+- OpenEvolve runs on cavitydetection with manual prompt variants
+- `make evolve-all` executes all prompts; results stored as scattered JSON files
+- Python script analyzes results; difficult to load into pandas due to format inconsistency
 
-### Results & Analysis
-- As a researcher, I want to **log runtime metrics** (total runtime, iteration count, per-iteration timing) for efficiency comparison across prompts.
-- As a researcher, I want **text-based results storage** so data is machine-readable and easy to analyze.
+## Phase 1: Results Consolidation (Immediate)
 
-### Program Support
-- As a researcher, I want to **run experiments across multiple test programs** (cavitydetection, loopoptimization1, others) without manual per-program setup.
-- As a researcher, I want **baseline metrics recorded per program** so I can measure improvement over baseline.
+### User Stories
+- As a researcher, I want all experiment results in a **unified, pandas-readable format** so I can easily load and analyze them
+- As a researcher, I want to compare **memory access metrics across prompts** to understand relative optimization quality
+- As a researcher, I want to track **convergence speed per prompt** (when best was found, how many iterations)
 
-## Success Criteria
+### Deliverables
+- [ ] Unified results storage: single consolidated JSON or CSV per experiment run
+- [ ] Results schema: prompt, iteration, code, memory_reads, memory_writes, timing_per_iteration
+- [ ] Results loader: Python function to read results into pandas DataFrame
+- [ ] Update `run_experiment.py` to output consolidated format
+- [ ] Update `make evolve-all` to optionally aggregate results
 
-- [ ] Framework supports ≥2 distinct programs (cavitydetection, loopoptimization1 minimum)
-- [ ] LLM model is consistent across all experiments; configurable in one place
-- [ ] Hardware/OS metadata captured and stored for each experiment run
-- [ ] Memory metrics (read/write accesses) recorded and reported per program
-- [ ] Metric plugin system works; users can add new collectors (sketch interface)
-- [ ] LLM-generated explanation captured for each iteration
-- [ ] Results stored in text-based format (JSON/CSV/TSV) 
-- [ ] Per-iteration timing logged (total runtime, iteration time)
-- [ ] Baseline values recorded per program for comparison
+### Success Criteria
+- One pandas DataFrame loads all results from one experiment run
+- Can filter by prompt, plot convergence curves, compare metrics
+- Results are machine-readable; no manual parsing needed
+
+---
+
+## Phase 2: LLM Explanations (Next Priority)
+
+### User Stories
+- As a researcher, I want to see **what the LLM thought at each iteration** so I can understand its reasoning
+- As a researcher, I want **explanations stored alongside results** so I can correlate transformations with metric improvements
+
+### Deliverables
+- [ ] Prompt the LLM after each iteration: "Explain the transformations in [code] compared to baseline"
+- [ ] Store explanation in consolidated results (new `explanation` field per iteration)
+- [ ] Update results schema to include `explanation`
+- [ ] Update results loader to expose explanations in DataFrame
+
+### Success Criteria
+- Each iteration has a concise explanation (1-2 sentences)
+- Explanations are relevant (mention actual optimizations attempted)
+- Can group iterations by explanation theme to understand prompt's strategy
+
+---
+
+## Phase 3+: Optional Future Work
+
+### Not in this milestone, but sketch for later:
+- **Multi-program support:** Run same prompt variants on different algorithms
+- **Metric plugins:** valgrind, energy, runtime measurements
+- **Baseline normalization:** Compare against program-specific baselines
+
+---
 
 ## Constraints & Assumptions
 
-- **Timeline:** One week (this week: 2026-05-13 to 2026-05-19)
-- **Model:** Using Ollama locally; consistent across experiments
-- **Programs:** Start with existing cavitydetection and loopoptimization1; extensible for future programs
-- **Metrics:** Memory accesses via LLVM instrumentation (already built); future metrics TBD
-- **Explanation:** Prompt the LLM to explain transformations; assume it can generate coherent explanations
+- **Timeline:** 1 week (2026-05-13 to 2026-05-19)
+- **Programs:** cavitydetection only (for now)
+- **Metrics:** Memory accesses via LLVM (existing); no new metrics yet
+- **LLM explanations:** Assume Ollama model can generate coherent explanations; simple prompt to start
 
-## Out of Scope (For Now)
+## Success Definition
 
-- Real-time metric monitoring (async collection)
-- Distributed experiment runs
-- Web dashboard (text-based results only)
-- Automatic prompt generation (prompt variants manually created)
-
-## Related Documentation
-
-- `CLAUDE.md` — existing build and setup instructions
-- `openevolve/config.yaml` — OpenEvolve configuration
-- `openevolve/initial_program.c` — current seed program (cavitydetection)
-- `.planning/newrequirements.md` — research motivation and questions
+- ✅ Phase 1: Consolidated results, easy pandas analysis, convergence visible
+- ✅ Phase 2: LLM explanations stored and accessible in results
+- ✅ Research questions partially answerable: prompt influence on speed + quality + strategy visible

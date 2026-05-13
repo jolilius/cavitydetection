@@ -1,109 +1,175 @@
 # Project State & Notes
 
 **Last Updated:** 2026-05-13  
-**Current Phase:** Framework Architecture (Phase 1 of 4)
+**Current Phase:** Phase 1 — Results Consolidation (In Planning)
 
 ---
 
-## Decisions Made
+## Key Decisions
 
-1. **Multi-program from start** — Not cavitydetection-only; framework designed for 2+ programs
-2. **LLM-generated explanations** — Model explains each transformation attempt in-situ
-3. **Plugin system for metrics** — Extensible metric collection; memory metric built-in, future metrics pluggable
-4. **Text-based results** — JSON/CSV storage; no web dashboard yet
-5. **One week timeline** — M1 ships by 2026-05-19 with framework + instrumentation + basic metrics
+1. **Incremental, working system** — Each phase ships value; system remains working
+2. **Phase 1 priority: Results consolidation** — Unified format for pandas analysis
+3. **Phase 2 priority: LLM explanations** — Understand what the model thought
+4. **Defer multi-program + metrics** — Not in M1; add later if needed
+5. **Research focus:** Prompt influence on convergence speed, quality, strategy
 
 ---
 
-## Implementation Notes
+## Implementation Plan (Phase 1)
 
-### Multi-Program Config
-- Centralize program definitions in `openevolve/config.yaml`
-- Each program declares: seed file, baseline access count, evaluator path, output directory
-- `run_experiment.py` iterates over programs; one invocation runs all
+### Results Schema Design
+Goal: Consolidated JSON file per experiment run (all iterations in one file)
 
-### LLM Explanations
-- After each iteration, prompt: "Explain the transformations in [mutated_code] compared to baseline. What compiler optimizations or idioms are present?"
-- Store explanation in results JSON per iteration
-- May need to tune prompt for clarity; have fallback to structured diffs
+**File structure:**
+```
+results/
+  cavitydetection/
+    baseline.json       (all iterations for "baseline" prompt variant)
+    prompt1.json
+    prompt2.json
+    ...
+```
 
-### Metric Plugin System
-- Interface: `class MetricCollector: def collect(candidate_code: str, baseline: dict) -> dict`
-- Discovery: scan `openevolve/metrics/` for `*.py` files
-- Config: `metrics:` section in YAML lists which to enable
-- First metric: memory accesses (read/write split) via LLVM instrumentation
-
-### Results Format (JSON)
+**Format (JSON):**
 ```json
 {
-  "experiment": {
+  "metadata": {
     "program": "cavitydetection",
-    "prompt": "baseline",
+    "prompt_variant": "baseline",
     "timestamp": "2026-05-13T10:30:00Z",
-    "hardware": {
-      "cpu": "Apple M1",
-      "ram_gb": 16,
-      "os": "macOS 14.5"
-    },
     "llm_model": "qwen2.5-coder:32b",
-    "iterations": [
-      {
-        "iteration": 1,
-        "code_hash": "abc123",
-        "explanation": "Reordered loops to improve cache locality...",
-        "metrics": {
-          "memory_reads": 123456,
-          "memory_writes": 654321,
-          "memory_total": 777777
-        },
-        "timing": {
-          "iteration_seconds": 12.5,
-          "cumulative_seconds": 12.5
-        }
-      }
-    ],
-    "summary": {
-      "total_iterations": 42,
-      "total_seconds": 480,
-      "best_score": 1.05,
-      "converged_at_iteration": 28
-    }
-  }
+    "total_iterations": 42,
+    "total_runtime_seconds": 480.5,
+    "best_memory_accesses": 98765432,
+    "convergence_iteration": 28
+  },
+  "baseline_metrics": {
+    "memory_accesses": 128862705,
+    "memory_reads": 64431352,
+    "memory_writes": 64431353
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "memory_accesses": 127000000,
+      "memory_reads": 63500000,
+      "memory_writes": 63500000,
+      "improvement_percent": 1.45,
+      "iteration_runtime_seconds": 12.3
+    },
+    ...
+  ]
 }
 ```
 
+### Pandas Loader Implementation
+```python
+def load_results(filepath):
+    """Load consolidated results into pandas DataFrame"""
+    import json
+    import pandas as pd
+    
+    with open(filepath) as f:
+        data = json.load(f)
+    
+    meta = data['metadata']
+    baseline = data['baseline_metrics']
+    
+    df = pd.DataFrame(data['iterations'])
+    df['prompt'] = meta['prompt_variant']
+    df['timestamp'] = meta['timestamp']
+    df['baseline_accesses'] = baseline['memory_accesses']
+    
+    return df
+```
+
+### Changes to `run_experiment.py`
+- After each iteration, append to consolidated JSON (not separate files)
+- Track baseline metrics per program (already available)
+- Record per-iteration timing
+- Calculate convergence metrics at end
+
+### Backward Compatibility
+- Keep old results around (for reference)
+- Use new format going forward
+- Document migration if needed
+
 ---
 
-## Known Challenges
+## Phase 2 Plan (LLM Explanations)
 
-| Challenge | Status | Plan |
-|-----------|--------|------|
-| LLM explanation generation may be slow | Open | Monitor timing; if >2s/iter, switch to diff-only and annotate manually |
-| Baseline metrics for loopoptimization1 not yet measured | Blocked on Phase 1 | Run baseline immediately after refactor |
-| Prompting model to explain transformations (no prior example) | Open | Start with simple prompt; iterate based on output quality |
+### Explanation Capture
+After each mutation evaluation:
+```python
+explanation = llm.generate(
+    f"Explain the transformations in this code compared to baseline. "
+    f"What compiler optimizations are present?\n\n{mutated_code}"
+)
+```
+
+### Extended Results Schema
+Add `explanation` field to each iteration:
+```json
+{
+  "iteration": 1,
+  "memory_accesses": 127000000,
+  "explanation": "Reordered inner loops to improve cache locality; adjacent accesses now sequential.",
+  ...
+}
+```
+
+### Timing Consideration
+- Estimate: 1-2 seconds per explanation (LLM inference)
+- For 40 iterations: ~40-80 sec overhead per experiment
+- Acceptable for research? Tune if needed.
 
 ---
 
-## Timeline Confidence
+## Current Confidence & Risks
 
-**Phase 1 (Framework):** High confidence — refactoring existing code, clear scope  
-**Phase 2 (Instrumentation):** Medium confidence — LLM explanation may need iteration  
-**Phase 3 (Metrics):** High confidence — plugin pattern is straightforward  
-**Phase 4 (Validation):** High confidence — integration testing only  
+| Phase | Confidence | Risk | Mitigation |
+|-------|-----------|------|-----------|
+| Phase 1 | **High** | Breaking existing workflow | Keep old results; implement as new output path |
+| Phase 2 | **Medium** | LLM explanations slow or vague | Monitor timing; tune prompt if incoherent |
 
-**Buffer:** Built-in; can compress Phase 3 if needed.
+---
+
+## Timeline Breakdown
+
+**Phase 1 (Days 1-3):**
+- Day 1: Design results schema, start refactoring `run_experiment.py`
+- Day 2: Implement pandas loader, test on existing experiments
+- Day 3: Verify convergence visible in pandas; finalize format
+
+**Phase 2 (Days 4-6):**
+- Day 4: Design explanation prompt, integrate into experiment loop
+- Day 5: Test on short runs (10 iterations); assess quality/speed
+- Day 6: Full test, documentation
+
+**Phase 3 (Day 7):**
+- Buffer for unexpected issues or polish
 
 ---
 
 ## Blockers & Dependencies
 
-- **None currently** — all prerequisites met (Ollama running, LLVM instrumentation working, OpenEvolve cloned)
-- **Next blocker:** Baseline measurement for loopoptimization1 (depends on Phase 1 refactor)
+**None currently.** 
+- LLVM instrumentation working ✓
+- Ollama running ✓
+- Existing results available for testing ✓
 
 ---
 
-## Communication
+## Open Questions
 
-- **Status:** Check this file before/after each phase
-- **Updates:** Brief notes here; detailed phase results in phase-specific documents
-- **Review points:** End of Phase 2 (assess LLM explanation quality); end of Phase 3 (validate metrics)
+1. **Explanation quality:** Will the model's explanations be accurate and useful? Plan: test on 1-2 short runs first.
+2. **Explanation timing:** Is 1-2s per iteration acceptable? Plan: monitor and optimize if needed.
+3. **Results aggregation:** Per-prompt JSON or one big JSON per run? Current plan: per-prompt (one file per prompt variant).
+
+---
+
+## Communication & Status
+
+- **Next review:** End of Phase 1 (should have working consolidation)
+- **Decision point:** If Phase 2 explanations slow or vague, adjust prompt and re-test
+- **Final ship:** Both phases complete, documentation ready, sample results reviewed

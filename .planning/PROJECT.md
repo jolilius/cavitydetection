@@ -1,6 +1,6 @@
-# Cavity Detection — OpenEvolve Research Framework Project
+# Cavity Detection — OpenEvolve Results & Explanations Framework
 
-**Project:** Multi-Program OpenEvolve Research Instrumentation Framework  
+**Project:** OpenEvolve Results Consolidation + LLM Explanations  
 **Owner:** Johan Lilius  
 **Start Date:** 2026-05-13  
 **Current Milestone:** M1 (2026-05-13 to 2026-05-19)
@@ -9,37 +9,39 @@
 
 ## Overview
 
-This project builds a research framework for systematically investigating how LLM-guided code evolution (via OpenEvolve) optimizes code. The framework supports multiple test programs, flexible metrics collection, and deep instrumentation to answer three core research questions:
+This project improves the research workflow for understanding how LLM-guided prompts influence OpenEvolve's code optimization search. Currently, experiment results are scattered across JSON files and difficult to analyze. The goal is to:
 
-1. **RQ1:** How effective is OpenEvolve at minimizing memory accesses?
-2. **RQ2:** How do different prompts influence the search (speed, quality, convergence)?
-3. **RQ3:** What program transformations does OpenEvolve attempt (compiler theory knowledge)?
+1. **Consolidate results** into a unified, pandas-readable format
+2. **Capture LLM explanations** (what the model thought at each iteration)
+3. **Enable analysis** of prompt influence on convergence speed, solution quality, and strategy
 
 ### Why This Matters
 
-Currently, OpenEvolve experiments are hard-coded for a single program (cavitydetection), prompt variants are manual, and results lack rich instrumentation. This makes it difficult to:
-- Compare prompt effectiveness fairly (different models, hardware configs)
-- Understand *what* the LLM is doing (transformations, reasoning)
-- Generalize findings to other programs
+Currently:
+- Results are scattered; loading into pandas requires custom parsing
+- No insight into LLM's reasoning (what transformations did it attempt?)
+- Difficult to compare prompt effectiveness systematically
 
-The new framework enables rigorous, reproducible research across programs and prompts.
+After this work:
+- All results in one place, easily analyzed with pandas
+- Clear view of prompt strategies (via LLM explanations)
+- Research questions answerable: How fast does each prompt converge? How good are the solutions? What is the LLM's strategy?
 
 ---
 
 ## Scope
 
-**In Scope:**
-- Multi-program experiment runner (cavitydetection, loopoptimization1, extensible for others)
-- Flexible metrics collection via plugin system (memory accesses, with hooks for valgrind, energy, runtime)
-- LLM-generated explanations of transformations
-- Hardware/OS/model metadata tracking per experiment
-- Text-based results storage for analysis
+**In Scope (M1):**
+- Results consolidation: unified JSON format, pandas loader
+- LLM explanations: capture what the model thought each iteration
+- Cavitydetection only (existing program)
+- Memory access metrics (existing LLVM instrumentation)
 
-**Out of Scope:**
-- Real-time monitoring or distributed runs
-- Web dashboards (text-based results only)
-- Automatic prompt generation
-- High-level result visualization (data only; analysis is user's responsibility)
+**Out of Scope (Defer):**
+- Multi-program support (future milestone)
+- Additional metrics (valgrind, energy, etc.)
+- Metric plugin system
+- Web dashboards or visualization
 
 ---
 
@@ -47,13 +49,27 @@ The new framework enables rigorous, reproducible research across programs and pr
 
 | Artifact | Purpose |
 |----------|---------|
-| `REQUIREMENTS.md` | Research questions, user stories, success criteria |
-| `ROADMAP.md` | 4-phase plan for 1-week delivery |
-| `.planning/newrequirements.md` | Original research motivation (ref) |
-| `openevolve/config.yaml` | Multi-program + metrics configuration |
-| `openevolve/run_experiment.py` | Refactored to support multi-program |
-| `openevolve/metrics/` | Plugin directory for metric collectors |
-| `results/` | Experiment results storage (JSON per run) |
+| `REQUIREMENTS.md` | Research goal, user stories, success criteria |
+| `ROADMAP.md` | 2-phase plan: consolidation → explanations |
+| `openevolve/run_experiment.py` | (to be refactored) Output unified results format |
+| `openevolve/results_loader.py` | (to be written) Load results into pandas DataFrame |
+| `.planning/STATE.md` | Ongoing notes, decisions, blockers |
+
+---
+
+## Current State (M1)
+
+**Phase 1:** Results Consolidation (2026-05-13 to 2026-05-15)
+- Refactor `run_experiment.py` to output unified JSON per experiment
+- Implement pandas loader function
+- Test on existing experiments
+- **Definition of Done:** Convergence curves visible in pandas
+
+**Phase 2:** LLM Explanations (2026-05-16 to 2026-05-19)
+- Integrate LLM explanation prompt into experiment loop
+- Extend results schema to capture explanations
+- Update pandas loader
+- **Definition of Done:** Sample results with explanations; strategy differences visible
 
 ---
 
@@ -61,61 +77,48 @@ The new framework enables rigorous, reproducible research across programs and pr
 
 **Researcher & Developer:** Johan Lilius (johan.lilius@gmail.com)
 
-**Status Updates:** Check `.planning/STATE.md` for ongoing notes and blockers.
+**Status Updates:** Check `.planning/STATE.md` for ongoing progress and blockers.
 
 ---
 
-## Current State
+## How to Use Results
 
-**Milestone 1 (M1):** 2026-05-13 to 2026-05-19
+### Phase 1 (After consolidation)
+```python
+import pandas as pd
+from openevolve.results_loader import load_results
 
-- Phase 1: Framework Architecture (multi-program config, refactor runner)
-- Phase 2: Instrumentation (metadata, explanations, results format)
-- Phase 3: Metric Plugin System (design + memory metric)
-- Phase 4: Validation & Polish (E2E test, documentation)
+# Load all iterations from one prompt variant
+df = load_results("results/cavitydetection/baseline.json")
 
-**Blockers:** None currently  
-**Risk:** LLM explanation generation may be slow; have fallback to manual annotation  
+# Plot convergence
+import matplotlib.pyplot as plt
+df.plot(x='iteration', y='memory_accesses')
+plt.show()
 
----
+# Compare across prompts
+df_baseline = load_results("results/cavitydetection/baseline.json")
+df_prompt1 = load_results("results/cavitydetection/prompt1.json")
+compare_df = pd.concat([df_baseline, df_prompt1], keys=['baseline', 'prompt1'])
+compare_df.plot(x='iteration', y='memory_accesses')
+```
 
-## How to Extend This Project
+### Phase 2 (With explanations)
+```python
+df = load_results("results/cavitydetection/baseline.json")
 
-### Adding a New Test Program
+# See explanations
+print(df[['iteration', 'memory_accesses', 'explanation']])
 
-1. Create `<program>.c` with `EVOLVE-BLOCK` markers and baseline reference
-2. Register in `openevolve/config.yaml` under `programs`:
-   ```yaml
-   programs:
-     myprogram:
-       seed: openevolve/myprogram.c
-       baseline_accesses: 1234567
-       output_dir: results/myprogram/
-   ```
-3. Implement evaluator if custom metrics needed
-4. Run: `python openevolve/run_experiment.py <prompt> --programs myprogram`
-
-### Adding a New Metric
-
-1. Create `openevolve/metrics/my_metric.py` implementing `MetricCollector` interface
-2. Register in `openevolve/config.yaml`:
-   ```yaml
-   metrics:
-     my_metric:
-       plugin: openevolve/metrics/my_metric.py
-       enabled: true
-   ```
-3. Run: metrics are auto-discovered and executed
-
-### Adding a New Prompt Variant
-
-1. Create `openevolve/prompts/<name>.txt`
-2. Run: `python openevolve/run_experiment.py <name>`
+# Group by explanation theme (manual for now)
+loops_optimized = df[df['explanation'].str.contains('loop', case=False)]
+cache_optimized = df[df['explanation'].str.contains('cache', case=False)]
+```
 
 ---
 
 ## References
 
-- **CLAUDE.md:** System setup, build commands, architecture overview
-- **openevolve/** upstream:** [OpenEvolve repo](https://github.com/codelion/openevolve)
-- **Research questions:** `.planning/newrequirements.md`
+- **CLAUDE.md:** System setup, build commands
+- **openevolve/:** Existing framework (Ollama-based code evolution)
+- **REQUIREMENTS.md:** Full research motivation
