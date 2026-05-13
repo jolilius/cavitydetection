@@ -11,12 +11,15 @@ Always starts fresh (no checkpoint).
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
 import tempfile
 
 import yaml
+
+from .consolidate_results import consolidate_experiment
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -65,6 +68,24 @@ def main():
             ],
             check=True,
         )
+
+        # Consolidate results after OpenEvolve completes
+        try:
+            result = consolidate_experiment(
+                output_dir=output_dir,
+                program="cavitydetection",
+                prompt_variant=args.prompt,
+                baseline_accesses=128_862_705,
+            )
+            # Write to output_dir/results.json
+            results_path = os.path.join(output_dir, "results.json")
+            with open(results_path, "w") as f:
+                json.dump(result, f, indent=2)
+            print(f"✓ Consolidated results: {results_path}")
+        except Exception as e:
+            print(f"Warning: Could not consolidate results: {e}")
+            # Non-blocking; experiment succeeded even if consolidation fails
+
     finally:
         os.unlink(tmp_config)
 
