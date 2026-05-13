@@ -31,6 +31,57 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def get_explanations(df: pd.DataFrame) -> dict:
+    """
+    Group explanations by iteration for analysis.
+
+    Extracts all non-NaN explanations from a DataFrame loaded via load_results()
+    or load_all_results() and organizes them by iteration number and prompt.
+
+    Args:
+        df: DataFrame from load_results() or load_all_results()
+
+    Returns:
+        Dictionary mapping iteration -> {prompt: explanation_text}
+        Example:
+        {
+            1: {"baseline": "Fused loops to reduce intermediate buffers...", "variant_a": "Reordered loops..."},
+            5: {"baseline": "Added bounds-check elimination..."},
+        }
+
+    Example:
+        df = load_all_results()
+        explained_by_iter = get_explanations(df)
+        for iteration, prompts in sorted(explained_by_iter.items()):
+            print(f"Iteration {iteration}:")
+            for prompt, explanation in prompts.items():
+                print(f"  {prompt}: {explanation[:60]}...")
+    """
+    result = {}
+    if 'explanation' not in df.columns or 'iteration' not in df.columns:
+        return result
+
+    # Filter for rows with explanations
+    explained_df = df[df['explanation'].notna()].copy()
+
+    for iteration in sorted(explained_df['iteration'].unique()):
+        iter_data = explained_df[explained_df['iteration'] == iteration]
+        result[iteration] = {}
+
+        # If 'prompt' column exists, group by prompt; otherwise use single entry
+        if 'prompt' in iter_data.columns:
+            for _, row in iter_data.iterrows():
+                prompt = row['prompt']
+                explanation = row['explanation']
+                result[iteration][prompt] = explanation
+        else:
+            # Single result (no prompt column)
+            if len(iter_data) > 0:
+                result[iteration]['single'] = iter_data.iloc[0]['explanation']
+
+    return result
+
+
 def load_results(filepath: str) -> pd.DataFrame:
     """
     Load consolidated results from a single JSON file into pandas DataFrame.
@@ -49,16 +100,25 @@ def load_results(filepath: str) -> pd.DataFrame:
           - timestamp (from metadata.timestamp)
           - baseline_accesses (from baseline_metrics.memory_accesses)
           - program (from metadata.program)
+          - explanation (from iterations[*].explanation, may be NaN for Phase 1 results)
 
     Raises:
         FileNotFoundError: If filepath does not exist
         json.JSONDecodeError: If JSON is invalid
         KeyError: If required schema fields are missing
 
+    Note:
+        The 'explanation' column may contain NaN values for early (Phase 1) results
+        that were generated before explanation support was added.
+
     Example:
         df = load_results('openevolve_output/baseline/results.json')
         convergence_point = df[df['memory_accesses'] == df['memory_accesses'].min()]['iteration'].iloc[0]
         print(f"Converged at iteration {convergence_point}")
+
+        # View explained iterations
+        explained = df[df['explanation'].notna()]
+        print(explained[['iteration', 'improvement_percent', 'explanation']])
     """
 
     if not os.path.isfile(filepath):
@@ -116,10 +176,11 @@ def load_results(filepath: str) -> pd.DataFrame:
         "memory_writes",
         "iteration_runtime_seconds",
     ]
+    explanation_cols = ["explanation"]
     metadata_cols = ["timestamp", "baseline_accesses", "program"]
 
     # Only include columns that exist in the dataframe
-    existing_cols = [c for c in primary_cols + secondary_cols + metadata_cols if c in df.columns]
+    existing_cols = [c for c in primary_cols + secondary_cols + explanation_cols + metadata_cols if c in df.columns]
     df = df[existing_cols]
 
     # Sort by iteration
@@ -144,6 +205,7 @@ def load_all_results(results_root: str = "openevolve_output") -> pd.DataFrame:
     Returns:
         pandas.DataFrame combining all results, with columns:
           - iteration, prompt, memory_accesses, improvement_percent, mem_score, ...
+          - explanation (may be NaN for Phase 1 results without explanation support)
           - sorted by (prompt, iteration)
 
     Example:
@@ -161,6 +223,15 @@ def load_all_results(results_root: str = "openevolve_output") -> pd.DataFrame:
             'improvement_percent': 'max'
         })
         print(comparison)
+
+    Example (analyzing explanations):
+        df = load_all_results()
+        # Find all iterations with explanations
+        explained = df[df['explanation'].notna()]
+        # Group by prompt and show explanations
+        for prompt in df['prompt'].unique():
+            subset = explained[explained['prompt'] == prompt]
+            print(f"{prompt}: {len(subset)} explained iterations")
     """
 
     # Find all results.json files
