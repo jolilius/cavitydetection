@@ -4,9 +4,10 @@ Run one OpenEvolve experiment for a named prompt.
 
 Usage (from project root):
     ../openevolve/.venv/bin/python openevolve/run_experiment.py <prompt_name> [--iterations N]
+    ../openevolve/.venv/bin/python openevolve/run_experiment.py <prompt_name> --run <id> --output-root <path>
 
-Reads  openevolve/prompts/<prompt_name>.txt  as the system message,
-writes results to  openevolve/openevolve_output/<prompt_name>/.
+Reads  openevolve/prompts/<prompt_name>.txt  as the system message.
+Writes results to  <output-root>/runs/<run-id>/cavitydetection/<prompt_name>/.
 Always starts fresh (no checkpoint).
 """
 
@@ -157,6 +158,10 @@ def main():
     parser = argparse.ArgumentParser(description="Run one prompt experiment")
     parser.add_argument("prompt", help="Prompt name (must match prompts/<name>.txt)")
     parser.add_argument("--iterations", type=int, default=80)
+    parser.add_argument("--run", default=None,
+        help="Run ID to group results (default: auto-generated from timestamp + model)")
+    parser.add_argument("--output-root", default=None,
+        help="Override output base directory (default: openevolve/openevolve_output/)")
     args = parser.parse_args()
 
     prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{args.prompt}.txt")
@@ -166,13 +171,23 @@ def main():
     with open(prompt_file) as f:
         prompt_text = f.read()
 
-    with open(os.path.join(SCRIPT_DIR, "config.yaml")) as f:
+    config_path = os.path.join(SCRIPT_DIR, "config.yaml")
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     config["prompt"]["system_message"] = prompt_text
 
-    output_dir = os.path.join(SCRIPT_DIR, "openevolve_output", args.prompt)
+    output_root = args.output_root or os.path.join(SCRIPT_DIR, "openevolve_output")
+    run_id = args.run or generate_run_id(config_path)
+    run_dir = os.path.join(output_root, "runs", run_id)
+    if not os.path.abspath(run_dir).startswith(os.path.abspath(output_root)):
+        sys.exit(f"Error: --run value escapes the output root: {run_id}")
+    output_dir = os.path.join(run_dir, "cavitydetection", args.prompt)
     os.makedirs(output_dir, exist_ok=True)
+    try:
+        write_run_metadata(run_dir, config, run_id, args.iterations, args.prompt)
+    except Exception as e:
+        print(f"Warning: Could not write run metadata: {e}", file=sys.stderr)
 
     python     = os.path.join(OPENEVOLVE, ".venv", "bin", "python")
     run_script = os.path.join(OPENEVOLVE, "openevolve-run.py")
