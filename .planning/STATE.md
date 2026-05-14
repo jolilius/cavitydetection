@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Experiment Runs + Per-Step Analysis
+current_phase: Phase 3 — Experiment Run Structure (not started)
 status: planning
-last_updated: "2026-05-14"
-last_activity: 2026-05-14
+last_updated: "2026-05-14T09:55:32.538Z"
+last_activity: 2026-05-14 — Milestone v1.1 roadmap created (Phases 3 and 4)
 progress:
-  total_phases: 2
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State & Notes
@@ -46,6 +47,7 @@ Last activity: 2026-05-14 — Milestone v1.1 roadmap created (Phases 3 and 4)
 Requirements: RUNORG-01, RUNORG-02, RUNORG-03, MIGRATE-01, DISPLAY-01
 
 Key deliverables:
+
 - `run_experiment.py --run <name>` flag; auto-generated run ID from timestamp + model
 - `make evolve-all` creates one run directory, passes run ID to each prompt invocation
 - `openevolve_output/runs/<run_id>/<program>/<prompt>/` layout
@@ -60,6 +62,7 @@ Key deliverables:
 Requirements: CKPT-01, CKPT-02, CKPT-03, EXPLAIN-01, EXPLAIN-02
 
 Key deliverables:
+
 - Consolidator reads `checkpoints/checkpoint_N/best_program.c` + `best_program_info.json` sorted by N
 - Schema per checkpoint row: `checkpoint_iteration`, `best_found_at_iteration`, `code`, `combined_score`, `mem_score`, `time_score`, `explanation`
 - `load_results()` → one row per checkpoint; `load_all_results()` → aggregated DataFrame
@@ -117,9 +120,11 @@ None currently.
 ## v1.0 Summary (COMPLETE)
 
 Phase 1: Results Consolidation
+
 - Unified JSON schema per experiment, `load_results()` → DataFrame, `load_all_results()`
 - Auto-consolidation in `run_experiment.py`, Makefile display targets
 
 Phase 2: LLM Explanations
+
 - `explanation_generator.py`, per-iteration explanation capture
 - Schema extended with `explanation` field, `get_explanations()` loader utility
