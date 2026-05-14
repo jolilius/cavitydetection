@@ -163,11 +163,14 @@ evolve:
 evolve-all:
 	@echo "Running all prompt variants (explanations enabled by default)..."
 	@echo "To skip explanation generation, use: EXPLAIN_GENERATIONS=0 make evolve-all"
-	@echo "Running experiments for prompts: $(PROMPT_NAMES)"
-	@for p in $(PROMPT_NAMES); do \
+	@RUN_ID=$$($(OPENEVOLVE_PYTHON) -c "import sys; sys.path.insert(0,'openevolve'); from run_experiment import generate_run_id; print(generate_run_id('openevolve/config.yaml'))"); \
+	echo "Run ID: $$RUN_ID"; \
+	echo "Running experiments for prompts: $(PROMPT_NAMES)"; \
+	for p in $(PROMPT_NAMES); do \
 		echo ""; \
 		echo "=== Experiment: $$p ==="; \
 		$(OPENEVOLVE_PYTHON) openevolve/run_experiment.py $$p \
+			--run $$RUN_ID \
 			--iterations $${ITERATIONS:-80}; \
 	done
 
@@ -188,10 +191,10 @@ test-explanations-disabled:
 	@grep -q "explanation" openevolve/openevolve_output/baseline/results.json && echo "⚠ Explanation field found in results" || echo "✓ No explanations in results (as expected)"
 
 show-results:
-	$(OPENEVOLVE_PYTHON) openevolve/show_results.py
+	$(OPENEVOLVE_PYTHON) openevolve/show_results.py $(if $(RUN),--run $(RUN),)
 
 show-consolidated-results:
-	$(OPENEVOLVE_PYTHON) openevolve/show_consolidated.py
+	$(OPENEVOLVE_PYTHON) openevolve/show_consolidated.py $(if $(RUN),--run $(RUN),)
 
 results-summary: show-consolidated-results
 

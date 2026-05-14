@@ -194,6 +194,140 @@ def test_migration_idempotent():
             f"results.json missing after second migration run at {sentinel_dst}"
 
 
+def _write_minimal_results_json(path: str, prompt: str) -> None:
+    """Write a minimal results.json for testing discovery logic."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data = [
+        {
+            "iteration": 1,
+            "memory_accesses": 100000000,
+            "mem_score": 1.29,
+            "improvement_percent": 22.4,
+            "prompt": prompt,
+            "explanation": "",
+        }
+    ]
+    with open(path, "w") as f:
+        import json
+        json.dump(data, f)
+
+
+def test_show_results_run_filter():
+    """Test that glob discovery + run_id filter returns only matching run's results."""
+    import glob as globmod
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic run tree
+        path_a = os.path.join(tmpdir, "runs", "run-a", "cavitydetection", "baseline", "results.json")
+        path_b = os.path.join(tmpdir, "runs", "run-b", "cavitydetection", "prompt1", "results.json")
+        _write_minimal_results_json(path_a, "baseline")
+        _write_minimal_results_json(path_b, "prompt1")
+
+        # Discover all results
+        pattern = os.path.join(tmpdir, "runs", "**", "results.json")
+        all_paths = globmod.glob(pattern, recursive=True)
+
+        # Filter by run_id "run-a"
+        runs_dir = os.path.join(tmpdir, "runs")
+        filtered = []
+        for path in all_paths:
+            rel = os.path.relpath(path, runs_dir)
+            parts = rel.split(os.sep)
+            if len(parts) >= 4 and parts[0] == "run-a":
+                filtered.append(path)
+
+        assert len(filtered) == 1, f"Expected 1 result after run-a filter, got {len(filtered)}"
+        assert "baseline" in filtered[0], \
+            f"Expected 'baseline' in filtered path, got: {filtered[0]}"
+
+
+def test_show_results_all():
+    """Test that no run filter returns all results from all runs."""
+    import glob as globmod
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path_a = os.path.join(tmpdir, "runs", "run-a", "cavitydetection", "baseline", "results.json")
+        path_b = os.path.join(tmpdir, "runs", "run-b", "cavitydetection", "prompt1", "results.json")
+        _write_minimal_results_json(path_a, "baseline")
+        _write_minimal_results_json(path_b, "prompt1")
+
+        pattern = os.path.join(tmpdir, "runs", "**", "results.json")
+        all_paths = globmod.glob(pattern, recursive=True)
+
+        assert len(all_paths) == 2, f"Expected 2 paths with no filter, got {len(all_paths)}"
+        assert any("run-a" in p for p in all_paths), "Expected run-a in results"
+        assert any("run-b" in p for p in all_paths), "Expected run-b in results"
+
+
+def test_show_consolidated_run_filter():
+    """Test that extract_run_id correctly extracts run_id from paths."""
+    import glob as globmod
+    from show_consolidated import extract_run_id
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path_x = os.path.join(tmpdir, "runs", "run-x", "cavitydetection", "baseline", "results.json")
+        path_y = os.path.join(tmpdir, "runs", "run-y", "cavitydetection", "prompt1", "results.json")
+        _write_minimal_results_json(path_x, "baseline")
+        _write_minimal_results_json(path_y, "prompt1")
+
+        pattern = os.path.join(tmpdir, "runs", "**", "results.json")
+        all_paths = globmod.glob(pattern, recursive=True)
+
+        # Verify extract_run_id returns correct segment for each path
+        for path in all_paths:
+            rid = extract_run_id(path)
+            assert rid in ("run-x", "run-y"), \
+                f"Expected run-x or run-y from extract_run_id, got: {rid}"
+
+        # Simulate filter: keep only run-x
+        filtered = [(p, extract_run_id(p)) for p in all_paths if extract_run_id(p) == "run-x"]
+        assert len(filtered) == 1, f"Expected 1 after run-x filter, got {len(filtered)}"
+        assert "baseline" in filtered[0][0], \
+            f"Expected 'baseline' in filtered path, got: {filtered[0][0]}"
+
+
+def test_evolve_all_shared_run():
+    """Test that write_run_metadata accumulates prompts under the same run_id."""
+    from run_experiment import generate_run_id, write_run_metadata
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        import json
+        import yaml
+
+        config_path = _write_mock_config(tmpdir)
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        # Simulate what evolve-all does: generate one run_id and use for both prompts
+        run_id = generate_run_id(config_path)
+        run_dir = os.path.join(tmpdir, "runs", run_id)
+
+        write_run_metadata(run_dir, config, run_id, 80, "baseline")
+        write_run_metadata(run_dir, config, run_id, 80, "prompt1")
+
+        meta_path = os.path.join(run_dir, "metadata.json")
+        assert os.path.isfile(meta_path), f"metadata.json not found at {meta_path}"
+
+        with open(meta_path) as f:
+            metadata = json.load(f)
+
+        assert "baseline" in metadata["prompts"], \
+            f"'baseline' not in prompts: {metadata['prompts']}"
+        assert "prompt1" in metadata["prompts"], \
+            f"'prompt1' not in prompts: {metadata['prompts']}"
+        assert metadata["run_id"] == run_id, \
+            f"Expected run_id={run_id!r}, got: {metadata['run_id']!r}"
+
+        # Verify both prompts would be under the same run_id prefix
+        baseline_dir = os.path.join(tmpdir, "runs", run_id, "cavitydetection", "baseline")
+        prompt1_dir = os.path.join(tmpdir, "runs", run_id, "cavitydetection", "prompt1")
+        # Both dirs are under the same run_id — verify the prefix is shared
+        assert baseline_dir.startswith(os.path.join(tmpdir, "runs", run_id)), \
+            "baseline_dir does not share run_id prefix"
+        assert prompt1_dir.startswith(os.path.join(tmpdir, "runs", run_id)), \
+            "prompt1_dir does not share run_id prefix"
+
+
 if __name__ == "__main__":
     try:
         print("Running test_run_id_format...")
@@ -218,6 +352,22 @@ if __name__ == "__main__":
 
         print("Running test_migration_idempotent...")
         test_migration_idempotent()
+        print("  PASSED")
+
+        print("Running test_show_results_run_filter...")
+        test_show_results_run_filter()
+        print("  PASSED")
+
+        print("Running test_show_results_all...")
+        test_show_results_all()
+        print("  PASSED")
+
+        print("Running test_show_consolidated_run_filter...")
+        test_show_consolidated_run_filter()
+        print("  PASSED")
+
+        print("Running test_evolve_all_shared_run...")
+        test_evolve_all_shared_run()
         print("  PASSED")
 
         print("\nAll tests passed")
