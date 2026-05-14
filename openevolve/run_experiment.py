@@ -132,8 +132,12 @@ def write_run_metadata(run_dir: str, config: dict, run_id: str, iterations: int,
     """Write (or merge) metadata.json in the run directory."""
     meta_path = os.path.join(run_dir, "metadata.json")
     if os.path.isfile(meta_path):
-        with open(meta_path) as f:
-            existing = json.load(f)
+        try:
+            with open(meta_path) as f:
+                existing = json.load(f)
+        except (IOError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not read existing metadata.json (will overwrite): {e}", file=sys.stderr)
+            existing = {}
     else:
         existing = {}
     prompts_so_far = existing.get("prompts", [])
