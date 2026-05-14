@@ -54,8 +54,8 @@
 Plans:
 
 **Wave 1**
-- [ ] 03-01-PLAN.md — Test scaffolding + run_experiment.py run ID, --run/--output-root args, and metadata.json write
-- [ ] 03-02-PLAN.md — Migration script (migrate_legacy.py) for all legacy flat directories
+- [x] 03-01-PLAN.md — Test scaffolding + run_experiment.py run ID, --run/--output-root args, and metadata.json write
+- [x] 03-02-PLAN.md — Migration script (migrate_legacy.py) for all legacy flat directories
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-03-PLAN.md — Display scripts adaptation (show_results.py, show_consolidated.py) + Makefile RUN= pass-through and evolve-all run grouping
