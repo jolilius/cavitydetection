@@ -21,6 +21,7 @@ Usage:
 import hashlib
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -172,68 +173,94 @@ def _extract_iterations(
     explanations: Optional[dict] = None,
 ) -> list:
     """
-    Extract per-iteration metrics from OpenEvolve output.
+    Extract per-iteration metrics from OpenEvolve checkpoint directories.
 
-    Strategy (graceful degradation):
-    1. If per-iteration data exists (future OpenEvolve enhancement): parse all
-    2. Fallback: create synthetic single iteration from best result
+    Scans checkpoints/checkpoint_N/ directories (sorted numerically by N),
+    builds one row per checkpoint with Phase 4 schema fields.
 
     Args:
         output_dir: Root experiment output directory
-        best_info: Dictionary from _load_best_result()
-        baseline_accesses: Reference baseline
-        explanations: Optional dict mapping iteration number -> explanation text
+        best_info: Dictionary from _load_best_result() — kept for backward-compat
+                   signature; no longer used for row building.
+        baseline_accesses: Reference baseline memory accesses
+        explanations: Optional dict mapping integer folder N -> explanation text
+                      (Pitfall 2: keyed by folder N, not JSON 'iteration' field)
 
     Returns:
-        List of iteration dictionaries matching RESULTS_FORMAT.md schema
+        List of iteration dictionaries with Phase 4 schema fields plus
+        backward-compat 'iteration' alias.
     """
+    checkpoints_dir = os.path.join(output_dir, "checkpoints")
+    if not os.path.isdir(checkpoints_dir):
+        return []
 
-    iterations = []
+    # List all checkpoint_N/ subdirectories
+    dirs = [
+        d for d in os.listdir(checkpoints_dir)
+        if d.startswith("checkpoint_") and os.path.isdir(os.path.join(checkpoints_dir, d))
+    ]
+    # Sort numerically to avoid lexicographic ordering bugs (checkpoint_10 before checkpoint_5)
+    dirs.sort(key=lambda d: int(d.replace("checkpoint_", "")))
 
-    # Try to load per-iteration data (if available in future versions)
-    # For now, fallback to best result only
+    rows = []
+    for ckpt_dir in dirs:
+        checkpoint_n = int(ckpt_dir.replace("checkpoint_", ""))
+        ckpt_path = os.path.join(checkpoints_dir, ckpt_dir)
 
-    if best_info:
-        # Extract metrics from best_program_info.json
-        metrics = best_info.get("metrics", {})
+        info_path = os.path.join(ckpt_path, "best_program_info.json")
+        code_path = os.path.join(ckpt_path, "best_program.c")
+
+        if not os.path.isfile(info_path) or not os.path.isfile(code_path):
+            print(f"Warning: skipping incomplete checkpoint {ckpt_dir}", file=sys.stderr)
+            continue
+
+        try:
+            with open(info_path) as f:
+                info = json.load(f)
+            with open(code_path) as f:
+                code = f.read()
+        except (IOError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not load checkpoint {ckpt_dir}: {e}", file=sys.stderr)
+            continue
+
+        metrics = info.get("metrics", {})
         mem_score = metrics.get("mem_score") or metrics.get("combined_score") or 1.0
-        iteration_num = best_info.get("iteration", 1)
 
-        # Convert score to memory accesses
-        if mem_score > 0:
-            memory_accesses = int(baseline_accesses / mem_score)
-        else:
-            memory_accesses = baseline_accesses
+        # D-05: use JSON 'iteration' (best-found generation), NOT 'current_iteration'
+        best_found_at = info.get("iteration", checkpoint_n)
 
-        # Calculate improvement
+        # Derive memory access counts from mem_score
+        memory_accesses = int(baseline_accesses / mem_score) if mem_score > 0 else baseline_accesses
         improvement_percent = (baseline_accesses - memory_accesses) / baseline_accesses * 100
-
-        # Split reads/writes
         memory_reads = memory_accesses // 2
         memory_writes = memory_accesses - memory_reads
 
-        # Estimate iteration runtime (placeholder)
-        iteration_runtime = best_info.get("runtime_seconds", 15.0)
-
-        iteration_record = {
-            "iteration": iteration_num,
+        row = {
+            # Backward-compat alias: load_results() sorts on "iteration"
+            "iteration": checkpoint_n,
+            # Phase 4 fields
+            "checkpoint_iteration": checkpoint_n,               # D-05: folder N
+            "best_found_at_iteration": best_found_at,           # D-05: JSON iteration field
+            "code": code,                                       # CKPT-02: full C source text
+            "combined_score": round(mem_score, 4),              # D-02: equals mem_score for now
+            "time_score": None,                                 # D-01: null placeholder
+            # Existing metric fields
             "memory_accesses": memory_accesses,
             "memory_reads": memory_reads,
             "memory_writes": memory_writes,
             "improvement_percent": round(improvement_percent, 2),
-            "iteration_runtime_seconds": round(iteration_runtime, 1),
             "mem_score": round(mem_score, 4),
         }
 
-        # Add explanation if available
-        if explanations and iteration_num in explanations:
-            explanation = explanations[iteration_num]
+        # Thread explanation by folder N (Pitfall 2: key by folder N, not JSON iteration)
+        if explanations and checkpoint_n in explanations:
+            explanation = explanations[checkpoint_n]
             if explanation is not None:
-                iteration_record["explanation"] = explanation
+                row["explanation"] = explanation
 
-        iterations.append(iteration_record)
+        rows.append(row)
 
-    return iterations
+    return rows
 
 
 def _extract_llm_model(output_dir: str) -> str:
