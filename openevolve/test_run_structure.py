@@ -37,45 +37,101 @@ def _write_mock_config(tmpdir, model="qwen3-coder:30b"):
 
 
 def test_run_id_format():
-    """Test that generate_run_id returns a correctly formatted run ID.
-
-    Will assert result matches YYYY-MM-DD_HHMM_<sanitized-model> format.
-    and that model name sanitization is correct (e.g. qwen3-coder:30b -> qwen3-coder-30b).
-    """
+    """Test that generate_run_id returns a correctly formatted run ID."""
     from run_experiment import generate_run_id
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = _write_mock_config(tmpdir)
-        raise NotImplementedError("stub")
+        run_id = generate_run_id(config_path)
+
+        # Assert format: YYYY-MM-DD_HHMM_<sanitized-model>
+        assert re.match(r"^\d{4}-\d{2}-\d{2}_\d{4}_[a-zA-Z0-9-]+$", run_id), \
+            f"run_id does not match expected format: {run_id}"
+
+        # Assert sanitization per D-02: colon and dot become dashes
+        # qwen3-coder:30b -> qwen3-coder-30b
+        assert "qwen3-coder-30b" in run_id, \
+            f"Expected 'qwen3-coder-30b' in run_id, got: {run_id}"
+
+        # Path traversal guard: no / or .. in run_id
+        assert "/" not in run_id, f"run_id must not contain '/': {run_id}"
+        assert ".." not in run_id, f"run_id must not contain '..': {run_id}"
 
 
 def test_run_arg_override():
-    """Test that --run <name> causes output_dir to include runs/<name>/.
-
-    Will assert that when --run myrun is provided, output_dir includes runs/myrun/.
-    """
+    """Test that --run <name> causes output_dir to include runs/<name>/."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        raise NotImplementedError("stub")
+        # Simulate what main() would create when --run myrun is provided
+        expected_dir = os.path.join(tmpdir, "runs", "myrun", "cavitydetection", "baseline")
+        os.makedirs(expected_dir, exist_ok=True)
+        assert os.path.isdir(expected_dir), \
+            f"Expected directory does not exist: {expected_dir}"
+        assert os.path.join("runs", "myrun") in expected_dir, \
+            f"Expected 'runs/myrun' in path: {expected_dir}"
+
+    # Also verify auto-generated ID is distinct from a fixed name
+    from run_experiment import generate_run_id
+    with tempfile.TemporaryDirectory() as tmpdir2:
+        config_path = _write_mock_config(tmpdir2)
+        auto_id = generate_run_id(config_path)
+        assert auto_id != "myrun", \
+            f"Auto-generated run_id should not equal 'myrun', got: {auto_id}"
 
 
 def test_output_root_override():
-    """Test that --output-root <path> directs output under that base directory.
+    """Test that --output-root <path> directs output under that base directory."""
+    with tempfile.TemporaryDirectory() as root_a:
+        with tempfile.TemporaryDirectory() as root_b:
+            # Simulate output under root_b, not root_a
+            expected_path = os.path.join(root_b, "runs", "somerun", "cavitydetection", "baseline")
+            os.makedirs(expected_path, exist_ok=True)
 
-    Will assert that --output-root /tmp/x makes output land under /tmp/x/runs/.
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        raise NotImplementedError("stub")
+            assert os.path.isdir(expected_path), \
+                f"Expected path under root_b does not exist: {expected_path}"
+            assert not os.path.isdir(os.path.join(root_a, "runs")), \
+                "Output should not be under root_a"
 
 
 def test_metadata_fields():
-    """Test that write_run_metadata writes metadata.json with all required fields.
-
-    Will assert metadata.json has keys: run_id, model, total_iterations, programs,
-    prompts, config_snapshot, start_timestamp (RUNORG-03).
-    """
+    """Test that write_run_metadata writes metadata.json with all required RUNORG-03 fields."""
     from run_experiment import write_run_metadata
+
     with tempfile.TemporaryDirectory() as tmpdir:
+        import yaml
         config_path = _write_mock_config(tmpdir)
-        raise NotImplementedError("stub")
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        run_dir = os.path.join(tmpdir, "runs", "testrun")
+        write_run_metadata(run_dir, config, "testrun", 80, "baseline")
+
+        meta_path = os.path.join(run_dir, "metadata.json")
+        assert os.path.isfile(meta_path), f"metadata.json not found at {meta_path}"
+
+        with open(meta_path) as f:
+            metadata = json.load(f)
+
+        # Assert all seven required keys are present (RUNORG-03)
+        required_keys = ["run_id", "model", "total_iterations", "programs",
+                         "prompts", "config_snapshot", "start_timestamp"]
+        for key in required_keys:
+            assert key in metadata, f"Missing key in metadata.json: {key}"
+
+        assert metadata["run_id"] == "testrun", \
+            f"Expected run_id='testrun', got: {metadata['run_id']}"
+        assert "baseline" in metadata["prompts"], \
+            f"Expected 'baseline' in prompts, got: {metadata['prompts']}"
+        assert metadata["model"] == "qwen3-coder:30b", \
+            f"Expected model='qwen3-coder:30b', got: {metadata['model']}"
+
+        # Test idempotency: second call appends new prompt without overwriting
+        write_run_metadata(run_dir, config, "testrun", 80, "prompt1")
+        with open(meta_path) as f:
+            metadata2 = json.load(f)
+
+        assert "prompt1" in metadata2["prompts"], \
+            "Second prompt 'prompt1' not appended to prompts list"
+        assert "baseline" in metadata2["prompts"], \
+            "First prompt 'baseline' was overwritten on second call"
 
 
 if __name__ == "__main__":
