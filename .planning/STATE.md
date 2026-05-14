@@ -1,3 +1,18 @@
+---
+gsd_state_version: 1.0
+milestone: v1.1
+milestone_name: Experiment Runs + Per-Step Analysis
+status: planning
+last_updated: "2026-05-14T09:39:03.250Z"
+last_activity: 2026-05-14
+progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
 # Project State & Notes
 
 **Last Updated:** 2026-05-13  
@@ -18,9 +33,11 @@
 ## Implementation Plan (Phase 1)
 
 ### Results Schema Design
+
 Goal: Consolidated JSON file per experiment run (all iterations in one file)
 
 **File structure:**
+
 ```
 results/
   cavitydetection/
@@ -31,6 +48,7 @@ results/
 ```
 
 **Format (JSON):**
+
 ```json
 {
   "metadata": {
@@ -63,6 +81,7 @@ results/
 ```
 
 ### Pandas Loader Implementation
+
 ```python
 def load_results(filepath):
     """Load consolidated results into pandas DataFrame"""
@@ -84,12 +103,14 @@ def load_results(filepath):
 ```
 
 ### Changes to `run_experiment.py`
+
 - After each iteration, append to consolidated JSON (not separate files)
 - Track baseline metrics per program (already available)
 - Record per-iteration timing
 - Calculate convergence metrics at end
 
 ### Backward Compatibility
+
 - Keep old results around (for reference)
 - Use new format going forward
 - Document migration if needed
@@ -99,7 +120,9 @@ def load_results(filepath):
 ## Phase 2 Plan (LLM Explanations)
 
 ### Explanation Capture
+
 After each mutation evaluation:
+
 ```python
 explanation = llm.generate(
     f"Explain the transformations in this code compared to baseline. "
@@ -108,7 +131,9 @@ explanation = llm.generate(
 ```
 
 ### Extended Results Schema
+
 Add `explanation` field to each iteration:
+
 ```json
 {
   "iteration": 1,
@@ -119,6 +144,7 @@ Add `explanation` field to each iteration:
 ```
 
 ### Timing Consideration
+
 - Estimate: 1-2 seconds per explanation (LLM inference)
 - For 40 iterations: ~40-80 sec overhead per experiment
 - Acceptable for research? Tune if needed.
@@ -137,16 +163,19 @@ Add `explanation` field to each iteration:
 ## Timeline Breakdown
 
 **Phase 1 (Days 1-3):**
+
 - Day 1: Design results schema, start refactoring `run_experiment.py`
 - Day 2: Implement pandas loader, test on existing experiments
 - Day 3: Verify convergence visible in pandas; finalize format
 
 **Phase 2 (Days 4-6):**
+
 - Day 4: Design explanation prompt, integrate into experiment loop
 - Day 5: Test on short runs (10 iterations); assess quality/speed
 - Day 6: Full test, documentation
 
 **Phase 3 (Day 7):**
+
 - Buffer for unexpected issues or polish
 
 ---
@@ -154,6 +183,7 @@ Add `explanation` field to each iteration:
 ## Blockers & Dependencies
 
 **None currently.** 
+
 - LLVM instrumentation working ✓
 - Ollama running ✓
 - Existing results available for testing ✓
@@ -173,3 +203,10 @@ Add `explanation` field to each iteration:
 - **Next review:** End of Phase 1 (should have working consolidation)
 - **Decision point:** If Phase 2 explanations slow or vague, adjust prompt and re-test
 - **Final ship:** Both phases complete, documentation ready, sample results reviewed
+
+## Current Position
+
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-14 — Milestone v1.1 started

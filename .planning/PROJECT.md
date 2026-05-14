@@ -3,7 +3,7 @@
 **Project:** OpenEvolve Results Consolidation + LLM Explanations  
 **Owner:** Johan Lilius  
 **Start Date:** 2026-05-13  
-**Current Milestone:** M1 (2026-05-13 to 2026-05-19)
+**Current Milestone:** v1.1 — Experiment Runs + Per-Step Analysis (2026-05-14 onwards)
 
 ---
 
@@ -57,19 +57,30 @@ After this work:
 
 ---
 
-## Current State (M1)
+## Current Milestone: v1.1 — Experiment Runs + Per-Step Analysis
 
-**Phase 1:** Results Consolidation (2026-05-13 to 2026-05-15)
-- Refactor `run_experiment.py` to output unified JSON per experiment
-- Implement pandas loader function
-- Test on existing experiments
-- **Definition of Done:** Convergence curves visible in pandas
+**Goal:** Enable observation of the LLM's full reasoning trajectory by structuring experiments as groupable runs and exposing per-checkpoint code + explanations at each evolution step.
 
-**Phase 2:** LLM Explanations (2026-05-16 to 2026-05-19)
-- Integrate LLM explanation prompt into experiment loop
-- Extend results schema to capture explanations
-- Update pandas loader
-- **Definition of Done:** Sample results with explanations; strategy differences visible
+**Target features:**
+- Experiment run directory structure: `runs/<run_id>/<program>/<prompt>/` with run metadata
+- `make evolve-all` creates a single dated run grouping all prompts
+- Legacy data migration: existing `baseline/` and `prompt1/` → `runs/legacy/cavitydetection/`
+- Checkpoint-based consolidation: `results.json` built from checkpoint directories, including code (C source) per step
+- Per-checkpoint explanations comparing each step's code to the previous checkpoint
+
+**Clarified research goal:** The primary objective is to observe the LLM's reasoning *trajectory* — not just the final optimum. Each checkpoint is a decision point; understanding what changed and why at each step is the primary research output.
+
+---
+
+## v1.0 — Results & Explanations Framework (COMPLETE)
+
+**Phase 1:** Results Consolidation
+- Unified JSON schema per experiment, pandas loader (`load_results`, `load_all_results`)
+- Auto-consolidation in `run_experiment.py`, Makefile display targets
+
+**Phase 2:** LLM Explanations
+- `explanation_generator.py`, per-experiment explanation capture
+- Schema extended with `explanation` field, `get_explanations()` loader utility
 
 ---
 
@@ -117,8 +128,27 @@ cache_optimized = df[df['explanation'].str.contains('cache', case=False)]
 
 ---
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
+---
+
 ## References
 
 - **CLAUDE.md:** System setup, build commands
 - **openevolve/:** Existing framework (Ollama-based code evolution)
-- **REQUIREMENTS.md:** Full research motivation
+- **REQUIREMENTS.md:** Full research motivation and v1.1 requirements
