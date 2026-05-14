@@ -164,6 +164,7 @@ evolve-all:
 	@echo "Running all prompt variants (explanations enabled by default)..."
 	@echo "To skip explanation generation, use: EXPLAIN_GENERATIONS=0 make evolve-all"
 	@RUN_ID=$$($(OPENEVOLVE_PYTHON) -c "import sys; sys.path.insert(0,'openevolve'); from run_experiment import generate_run_id; print(generate_run_id('openevolve/config.yaml'))"); \
+	if [ -z "$$RUN_ID" ]; then echo "ERROR: Failed to generate run ID" >&2; exit 1; fi; \
 	echo "Run ID: $$RUN_ID"; \
 	echo "Running experiments for prompts: $(PROMPT_NAMES)"; \
 	for p in $(PROMPT_NAMES); do \

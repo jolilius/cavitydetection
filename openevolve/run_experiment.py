@@ -185,7 +185,7 @@ def main():
     config["prompt"]["system_message"] = prompt_text
 
     output_root = args.output_root or os.path.join(SCRIPT_DIR, "openevolve_output")
-    run_id = args.run or generate_run_id(config_path)
+    run_id = args.run if args.run is not None else generate_run_id(config_path)
     run_dir = os.path.join(output_root, "runs", run_id)
     if not os.path.abspath(run_dir).startswith(os.path.abspath(output_root)):
         sys.exit(f"Error: --run value escapes the output root: {run_id}")
