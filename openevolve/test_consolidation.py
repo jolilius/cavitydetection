@@ -32,24 +32,29 @@ def test_consolidation():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Step 1: Create synthetic OpenEvolve output structure
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Step 1: Create synthetic checkpoints/checkpoint_25/ structure
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_25")
+        os.makedirs(ckpt_path)
 
         # Write minimal best_program_info.json (matching OpenEvolve format)
         synthetic_best = {
             "iteration": 25,
+            "current_iteration": 25,
             "metrics": {
                 "mem_score": 1.15,
                 "combined_score": 1.15,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
+        best_path = os.path.join(ckpt_path, "best_program_info.json")
         with open(best_path, "w") as f:
             json.dump(synthetic_best, f)
+
+        # Write synthetic best_program.c
+        code_path = os.path.join(ckpt_path, "best_program.c")
+        with open(code_path, "w") as f:
+            f.write("/* synthetic checkpoint 25 */")
 
         print(f"✓ Created synthetic best_program_info.json at {best_path}")
 
@@ -91,8 +96,8 @@ def test_consolidation():
             assert "memory_reads" in iter_record
             assert "memory_writes" in iter_record
             assert "improvement_percent" in iter_record
-            assert "iteration_runtime_seconds" in iter_record
             assert "mem_score" in iter_record
+            # Note: iteration_runtime_seconds is not emitted by checkpoint-based rows (Phase 4)
 
             # Verify derived fields are computed correctly
             baseline_acc = baseline["memory_accesses"]
@@ -117,7 +122,7 @@ def test_consolidation():
         assert "memory_reads" in df.columns
         assert "memory_writes" in df.columns
         assert "improvement_percent" in df.columns
-        assert "iteration_runtime_seconds" in df.columns
+        # Note: iteration_runtime_seconds is not present in checkpoint-based rows
         assert "mem_score" in df.columns
         assert "prompt" in df.columns
         assert "timestamp" in df.columns
@@ -153,32 +158,33 @@ def test_consolidate_with_explanations():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_42/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_42")
+        os.makedirs(ckpt_path)
 
         synthetic_best = {
             "iteration": 42,
+            "current_iteration": 42,
             "metrics": {
                 "mem_score": 1.25,
                 "combined_score": 1.25,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 42 */")
 
-        # Consolidate with explanations
+        # Consolidate with explanations keyed by folder N
         explanations = {
             42: "Reordered loops to improve cache locality"
         }
 
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
 
-        # Verify explanation is in result
+        # Verify explanation is in result (iteration alias == checkpoint_n == 42)
         assert result['iterations'][0].get('explanation') == "Reordered loops to improve cache locality"
         print("✓ test_consolidate_with_explanations passed")
 
@@ -189,23 +195,24 @@ def test_consolidate_without_explanations():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_25/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_25")
+        os.makedirs(ckpt_path)
 
         synthetic_best = {
             "iteration": 25,
+            "current_iteration": 25,
             "metrics": {
                 "mem_score": 1.15,
                 "combined_score": 1.15,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 25 */")
 
         # Consolidate without explanations
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=None)
@@ -221,38 +228,38 @@ def test_consolidate_partial_explanations():
     from consolidate_results import consolidate_experiment
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_5/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_5")
+        os.makedirs(ckpt_path)
 
-        # Create synthetic best data with iteration 5
         synthetic_best = {
             "iteration": 5,
+            "current_iteration": 5,
             "metrics": {
                 "mem_score": 1.10,
                 "combined_score": 1.10,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 5 */")
 
-        # Explanations for iteration 5 and some other iteration (won't be used)
+        # Explanations for folder N=5 and some other N (won't be used since only checkpoint_5 exists)
         explanations = {
             5: "Refined approach",
-            1: "First attempt",  # This won't be used since only iteration 5 is in result
+            1: "First attempt",  # This won't be used since only checkpoint_5 is in result
         }
 
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
 
-        # Verify iteration 5 has explanation
+        # Verify checkpoint_5 has explanation (iteration alias == checkpoint_n == 5)
         result_dict = {it['iteration']: it for it in result['iterations']}
         assert result_dict[5].get('explanation') == "Refined approach"
 
-        # Verify iteration 5 is the only iteration
+        # Verify only one checkpoint row exists
         assert len(result_dict) == 1
         print("✓ test_consolidate_partial_explanations passed")
 
