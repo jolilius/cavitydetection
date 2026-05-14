@@ -62,9 +62,9 @@ After this work:
 **Goal:** Enable observation of the LLM's full reasoning trajectory by structuring experiments as groupable runs and exposing per-checkpoint code + explanations at each evolution step.
 
 **Target features:**
-- Experiment run directory structure: `runs/<run_id>/<program>/<prompt>/` with run metadata
-- `make evolve-all` creates a single dated run grouping all prompts
-- Legacy data migration: existing `baseline/` and `prompt1/` → `runs/legacy/cavitydetection/`
+- ✓ Experiment run directory structure: `runs/<run_id>/<program>/<prompt>/` with run metadata — **Phase 3 complete (2026-05-14)**
+- ✓ `make evolve-all` creates a single dated run grouping all prompts — **Phase 3 complete**
+- ✓ Legacy data migration: existing flat dirs → `runs/legacy/cavitydetection/` — **Phase 3 complete**
 - Checkpoint-based consolidation: `results.json` built from checkpoint directories, including code (C source) per step
 - Per-checkpoint explanations comparing each step's code to the previous checkpoint
 
