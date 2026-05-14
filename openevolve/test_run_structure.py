@@ -134,6 +134,66 @@ def test_metadata_fields():
             "First prompt 'baseline' was overwritten on second call"
 
 
+def test_migration_moves():
+    """Test that migrate_legacy moves all non-runs/ subdirs to runs/legacy/cavitydetection/."""
+    from migrate_legacy import migrate_legacy
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic source dirs simulating a flat legacy layout
+        os.makedirs(os.path.join(tmpdir, "baseline"))
+        os.makedirs(os.path.join(tmpdir, "prompt1"))
+        os.makedirs(os.path.join(tmpdir, "best"))
+
+        migrate_legacy(tmpdir)
+
+        # All three dirs should now be under runs/legacy/cavitydetection/
+        assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "baseline")), \
+            "baseline/ not found at runs/legacy/cavitydetection/baseline/"
+        assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "prompt1")), \
+            "prompt1/ not found at runs/legacy/cavitydetection/prompt1/"
+        assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "best")), \
+            "best/ not found at runs/legacy/cavitydetection/best/"
+
+        # Original locations should no longer exist (moved, not copied)
+        assert not os.path.exists(os.path.join(tmpdir, "baseline")), \
+            "baseline/ still exists at original location (should have been moved)"
+
+        # runs/ itself should still exist (skip = {"runs"} worked)
+        assert os.path.isdir(os.path.join(tmpdir, "runs")), \
+            "runs/ directory was incorrectly removed"
+
+
+def test_migration_idempotent():
+    """Test that migrate_legacy is idempotent: re-running skips already-migrated dirs."""
+    from migrate_legacy import migrate_legacy
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source dir with a sentinel file
+        os.makedirs(os.path.join(tmpdir, "baseline"))
+        sentinel_src = os.path.join(tmpdir, "baseline", "results.json")
+        with open(sentinel_src, "w") as f:
+            f.write("data")
+
+        # First run: moves baseline/ to runs/legacy/cavitydetection/baseline/
+        migrate_legacy(tmpdir)
+
+        migrated_path = os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "baseline")
+        assert os.path.isdir(migrated_path), \
+            f"baseline/ not found at {migrated_path} after first migration"
+
+        # Sentinel file should be preserved (no data loss)
+        sentinel_dst = os.path.join(migrated_path, "results.json")
+        assert os.path.isfile(sentinel_dst), \
+            f"results.json not found at {sentinel_dst} (data loss)"
+        with open(sentinel_dst) as f:
+            assert f.read() == "data", "results.json content changed after migration (data loss)"
+
+        # Second run (idempotency): should not raise, file should still be present
+        migrate_legacy(tmpdir)
+        assert os.path.isfile(sentinel_dst), \
+            f"results.json missing after second migration run at {sentinel_dst}"
+
+
 if __name__ == "__main__":
     try:
         print("Running test_run_id_format...")
@@ -150,6 +210,14 @@ if __name__ == "__main__":
 
         print("Running test_metadata_fields...")
         test_metadata_fields()
+        print("  PASSED")
+
+        print("Running test_migration_moves...")
+        test_migration_moves()
+        print("  PASSED")
+
+        print("Running test_migration_idempotent...")
+        test_migration_idempotent()
         print("  PASSED")
 
         print("\nAll tests passed")
