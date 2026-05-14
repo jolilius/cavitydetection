@@ -3,7 +3,7 @@
 Print a summary table of all completed prompt experiments.
 
 Usage (from project root):
-    ../openevolve/.venv/bin/python openevolve/show_results.py [--verbose]
+    ../openevolve/.venv/bin/python openevolve/show_results.py [--verbose] [--run <run_id>]
 
 Columns:
   prompt        — name of the prompt file used
@@ -17,8 +17,10 @@ Prefers consolidated format if available.
 """
 
 import argparse
+import glob
 import json
 import os
+import re
 import sys
 
 SCRIPT_DIR         = os.path.dirname(os.path.abspath(__file__))
@@ -82,18 +84,57 @@ def load_result(prompt_name: str) -> dict | None:
     return load_legacy_result(prompt_name)
 
 
+def load_result_from_path(results_path: str, run_id: str, prompt_name: str) -> dict | None:
+    """Load consolidated result from a specific results.json path."""
+    try:
+        from results_loader import load_results
+        if os.path.isfile(results_path):
+            df = load_results(results_path)
+            if not df.empty:
+                best_row = df[df['memory_accesses'] == df['memory_accesses'].min()].iloc[0]
+                return {
+                    'prompt': prompt_name,
+                    'mem_score': best_row['mem_score'],
+                    'iter_found': int(best_row['iteration']),
+                    'accesses': int(best_row['memory_accesses']),
+                    'format': 'consolidated',
+                    'run_id': run_id,
+                }
+    except Exception:
+        pass
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Show experiment results (best per prompt)")
     parser.add_argument("--verbose", action="store_true", help="Show data format used")
+    parser.add_argument("--run", default=None,
+        help="Filter output to a specific run ID (default: show all runs)")
     args = parser.parse_args()
 
-    if not os.path.isdir(OUTPUT_ROOT):
+    runs_dir = os.path.join(OUTPUT_ROOT, "runs")
+    if not os.path.isdir(runs_dir):
         print("No results yet — run  make evolve-all  first.")
         return
 
+    pattern = os.path.join(runs_dir, "**", "results.json")
+    paths = glob.glob(pattern, recursive=True)
+
     rows = []
-    for name in sorted(os.listdir(OUTPUT_ROOT)):
-        result = load_result(name)
+    for path in paths:
+        # Parse run_id and prompt from path structure:
+        # <runs_dir>/<run_id>/cavitydetection/<prompt>/results.json
+        rel = os.path.relpath(path, runs_dir)
+        parts = rel.split(os.sep)
+        if len(parts) < 4:
+            continue
+        run_id = parts[0]
+        prompt = parts[-2]
+
+        if args.run is not None and run_id != args.run:
+            continue
+
+        result = load_result_from_path(path, run_id, prompt)
         if result:
             rows.append(result)
 
