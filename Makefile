@@ -153,6 +153,7 @@ OPENEVOLVE_PYTHON = ../openevolve/.venv/bin/python
 OPENEVOLVE_RUN    = ../openevolve/openevolve-run.py
 PROMPTS           = $(wildcard openevolve/prompts/*.txt)
 PROMPT_NAMES      = $(basename $(notdir $(PROMPTS)))
+OUTPUT_ROOT      ?=
 
 evolve:
 	$(OPENEVOLVE_PYTHON) $(OPENEVOLVE_RUN) \
@@ -172,6 +173,7 @@ evolve-all:
 		echo "=== Experiment: $$p ==="; \
 		$(OPENEVOLVE_PYTHON) openevolve/run_experiment.py $$p \
 			--run $$RUN_ID \
+			$(if $(OUTPUT_ROOT),--output-root $(OUTPUT_ROOT),) \
 			--iterations $${ITERATIONS:-80}; \
 	done
 
@@ -192,10 +194,10 @@ test-explanations-disabled:
 	@grep -q "explanation" openevolve/openevolve_output/baseline/results.json && echo "⚠ Explanation field found in results" || echo "✓ No explanations in results (as expected)"
 
 show-results:
-	$(OPENEVOLVE_PYTHON) openevolve/show_results.py $(if $(RUN),--run $(RUN),)
+	$(OPENEVOLVE_PYTHON) openevolve/show_results.py $(if $(RUN),--run $(RUN),) $(if $(OUTPUT_ROOT),--output-root $(OUTPUT_ROOT),)
 
 show-consolidated-results:
-	$(OPENEVOLVE_PYTHON) openevolve/show_consolidated.py $(if $(RUN),--run $(RUN),)
+	$(OPENEVOLVE_PYTHON) openevolve/show_consolidated.py $(if $(RUN),--run $(RUN),) $(if $(OUTPUT_ROOT),--output-root $(OUTPUT_ROOT),)
 
 results-summary: show-consolidated-results
 
