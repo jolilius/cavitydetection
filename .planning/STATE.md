@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Experiment Runs + Per-Step Analysis
-current_phase: Phase 3 — Experiment Run Structure (not started)
-status: planning
-last_updated: "2026-05-14T09:55:32.538Z"
-last_activity: 2026-05-14 — Milestone v1.1 roadmap created (Phases 3 and 4)
+current_phase: Phase 3 — Experiment Run Structure (ready to execute)
+status: ready to execute
+last_updated: "2026-05-14"
+last_activity: 2026-05-14 — Phase 3 planned (3 plans, 2 waves)
 progress:
   total_phases: 4
   completed_phases: 2

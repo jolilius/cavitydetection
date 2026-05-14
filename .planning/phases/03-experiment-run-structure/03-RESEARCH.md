@@ -510,7 +510,7 @@ def load_results_with_run(filepath: str) -> pd.DataFrame:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Orphan top-level directories**
    - What we know: `openevolve_output/best/`, `openevolve_output/checkpoints/`, `openevolve_output/logs/` exist at the top level and were not created by named experiments
