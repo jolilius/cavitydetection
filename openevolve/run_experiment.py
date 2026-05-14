@@ -164,6 +164,9 @@ def main():
         help="Override output base directory (default: openevolve/openevolve_output/)")
     args = parser.parse_args()
 
+    if not re.match(r'^[a-zA-Z0-9_-]+$', args.prompt):
+        sys.exit(f"Error: prompt name must be alphanumeric with underscores/hyphens, got: {args.prompt!r}")
+
     prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{args.prompt}.txt")
     if not os.path.isfile(prompt_file):
         sys.exit(f"Prompt file not found: {prompt_file}")
