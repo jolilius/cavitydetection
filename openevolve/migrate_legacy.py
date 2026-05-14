@@ -23,12 +23,17 @@ def migrate_legacy(output_root: str) -> None:
     legacy_dir = os.path.join(output_root, "runs", "legacy", "cavitydetection")
     os.makedirs(legacy_dir, exist_ok=True)
 
-    skip = {"runs"}
+    skip = {"runs", "best", "checkpoints", "logs", "archive"}
     for name in sorted(os.listdir(output_root)):
         if name in skip:
             continue
         src = os.path.join(output_root, name)
         if not os.path.isdir(src):
+            continue
+        # Only migrate directories that look like prompt experiments
+        has_results = os.path.isfile(os.path.join(src, "results.json"))
+        has_best = os.path.isfile(os.path.join(src, "best", "best_program_info.json"))
+        if not (has_results or has_best):
             continue
         dst = os.path.join(legacy_dir, name)
         if os.path.exists(dst):
