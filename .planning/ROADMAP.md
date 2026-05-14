@@ -77,7 +77,7 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 04-01-PLAN.md — Wave 0 checkpoint tests + checkpoint-based `_extract_iterations()` in `consolidate_results.py` + extended column list in `results_loader.py` (CKPT-01, CKPT-02, CKPT-03)
+- [x] 04-01-PLAN.md — Wave 0 checkpoint tests + checkpoint-based `_extract_iterations()` in `consolidate_results.py` + extended column list in `results_loader.py` (CKPT-01, CKPT-02, CKPT-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 04-02-PLAN.md — Per-checkpoint explanation loop in `run_experiment.py` (EXPLAIN-01, EXPLAIN-02)
