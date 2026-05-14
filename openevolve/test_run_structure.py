@@ -351,6 +351,117 @@ def test_evolve_all_shared_run():
             "prompt1_dir does not share run_id prefix"
 
 
+def test_regenerate_flag():
+    """Test that regenerate_results() creates results.json.v1 backup before overwriting."""
+    from migrate_legacy import regenerate_results
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Set up: a migrated experiment with checkpoints/ and existing results.json
+        legacy_exp = os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "baseline")
+        os.makedirs(legacy_exp)
+
+        # Write existing results.json with a known legacy payload
+        original_payload = {
+            "metadata": {"prompt_variant": "baseline"},
+            "iterations": [
+                {"iteration": 1, "memory_accesses": 99999, "mem_score": 1.0}
+            ],
+            "baseline_metrics": {"memory_accesses": 128862705},
+        }
+        results_path = os.path.join(legacy_exp, "results.json")
+        with open(results_path, "w") as f:
+            json.dump(original_payload, f)
+        # Read back raw bytes for byte-for-byte comparison later
+        with open(results_path, "rb") as f:
+            original_bytes = f.read()
+
+        # Create checkpoints/checkpoint_5/ and checkpoints/checkpoint_10/
+        for n, mem_score in [(5, 1.10), (10, 1.15)]:
+            ckpt_path = os.path.join(legacy_exp, "checkpoints", f"checkpoint_{n}")
+            os.makedirs(ckpt_path)
+            info = {
+                "iteration": n,
+                "current_iteration": n,
+                "metrics": {"mem_score": mem_score},
+                "timestamp": "2026-05-14T10:00:00Z",
+            }
+            with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
+                json.dump(info, f)
+            with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+                f.write(f"/* synthetic checkpoint {n} */")
+
+        # Create an experiment dir with no checkpoints/ to verify skip path
+        empty_exp = os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "empty_exp")
+        os.makedirs(empty_exp)
+        empty_results_path = os.path.join(empty_exp, "results.json")
+        with open(empty_results_path, "w") as f:
+            json.dump({}, f)
+        with open(empty_results_path, "rb") as f:
+            empty_original_bytes = f.read()
+
+        # Call regenerate_results — must not raise
+        regenerate_results(tmpdir)
+
+        # --- Assertions on baseline ---
+        backup_path = os.path.join(legacy_exp, "results.json.v1")
+        assert os.path.isfile(backup_path), \
+            f"results.json.v1 backup not created at {backup_path}"
+
+        # Backup must be byte-for-byte copy of the original (D-10)
+        with open(backup_path, "rb") as f:
+            backup_bytes = f.read()
+        assert backup_bytes == original_bytes, \
+            "results.json.v1 backup content differs from original legacy payload"
+
+        # New results.json must still exist
+        assert os.path.isfile(results_path), \
+            "results.json missing after regeneration"
+
+        # Regenerated results.json must have 2 checkpoint rows
+        with open(results_path) as f:
+            data = json.load(f)
+        assert "iterations" in data, "Regenerated results.json missing 'iterations' key"
+        iters = data["iterations"]
+        assert len(iters) == 2, f"Expected 2 checkpoint rows, got {len(iters)}"
+
+        # Sort by checkpoint_iteration to guarantee order
+        iters_sorted = sorted(iters, key=lambda r: r["checkpoint_iteration"])
+        assert iters_sorted[0]["checkpoint_iteration"] == 5, \
+            f"Expected first checkpoint_iteration=5, got {iters_sorted[0]['checkpoint_iteration']}"
+        assert iters_sorted[1]["checkpoint_iteration"] == 10, \
+            f"Expected second checkpoint_iteration=10, got {iters_sorted[1]['checkpoint_iteration']}"
+
+        # Code field contains the synthetic content
+        assert "synthetic checkpoint 5" in iters_sorted[0]["code"], \
+            "Expected 'synthetic checkpoint 5' in code field of first row"
+
+        # time_score must be None (D-01)
+        assert iters_sorted[0]["time_score"] is None, \
+            "time_score must be null (D-01)"
+
+        # --- Assertions on empty_exp (no checkpoints/ subdir) ---
+        empty_backup_path = os.path.join(empty_exp, "results.json.v1")
+        assert not os.path.isfile(empty_backup_path), \
+            "results.json.v1 should NOT be created for empty_exp (no checkpoints/)"
+        # Original empty results.json unchanged
+        with open(empty_results_path, "rb") as f:
+            empty_after_bytes = f.read()
+        assert empty_after_bytes == empty_original_bytes, \
+            "empty_exp results.json was modified (should be unchanged)"
+
+        print("✓ test_regenerate_flag passed")
+
+
+def test_regenerate_no_legacy_dir():
+    """Test that regenerate_results() handles missing runs/legacy/cavitydetection/ gracefully."""
+    from migrate_legacy import regenerate_results
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # No runs/legacy/cavitydetection/ subtree exists
+        regenerate_results(tmpdir)  # must not raise
+        print("✓ test_regenerate_no_legacy_dir passed")
+
+
 if __name__ == "__main__":
     try:
         print("Running test_run_id_format...")
@@ -391,6 +502,14 @@ if __name__ == "__main__":
 
         print("Running test_evolve_all_shared_run...")
         test_evolve_all_shared_run()
+        print("  PASSED")
+
+        print("Running test_regenerate_flag...")
+        test_regenerate_flag()
+        print("  PASSED")
+
+        print("Running test_regenerate_no_legacy_dir...")
+        test_regenerate_no_legacy_dir()
         print("  PASSED")
 
         print("\nAll tests passed")
