@@ -43,10 +43,12 @@ def extract_run_id(filepath: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Show consolidated results from all experiments")
     parser.add_argument("--run", default=None, help="Filter to a specific run ID")
+    parser.add_argument("--output-root", default=None,
+        help="Override output base directory (default: openevolve/openevolve_output/)")
     args = parser.parse_args()
 
     try:
-        results_root = os.path.join(SCRIPT_DIR, "openevolve_output", "runs")
+        results_root = os.path.join(args.output_root or SCRIPT_DIR, "openevolve_output", "runs")
 
         paths = glob.glob(os.path.join(results_root, "**", "results.json"), recursive=True)
 

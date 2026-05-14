@@ -51,9 +51,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show data format used")
     parser.add_argument("--run", default=None,
         help="Filter output to a specific run ID (default: show all runs)")
+    parser.add_argument("--output-root", default=None,
+        help="Override output base directory (default: openevolve/openevolve_output/)")
     args = parser.parse_args()
 
-    runs_dir = os.path.join(OUTPUT_ROOT, "runs")
+    runs_dir = os.path.join(args.output_root or SCRIPT_DIR, "openevolve_output", "runs")
     if not os.path.isdir(runs_dir):
         print("No results yet — run  make evolve-all  first.")
         return
