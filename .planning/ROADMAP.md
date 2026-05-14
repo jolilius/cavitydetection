@@ -12,7 +12,7 @@
 
 - [x] **Phase 1: Results Consolidation** - Unified JSON schema per experiment; pandas loader functional
 - [x] **Phase 2: LLM Explanations** - Per-iteration explanation capture; `explanation` field in DataFrame
-- [ ] **Phase 3: Experiment Run Structure** - Named runs grouping all prompts; legacy data migrated
+- [x] **Phase 3: Experiment Run Structure** - Named runs grouping all prompts; legacy data migrated
 - [ ] **Phase 4: Per-Step Data Pipeline** - Checkpoint-based consolidation with code field; per-checkpoint explanations
 
 ---
@@ -84,7 +84,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Results Consolidation | — | Complete | 2026-05-13 |
 | 2. LLM Explanations | — | Complete | 2026-05-13 |
-| 3. Experiment Run Structure | 0/3 | Not started | - |
+| 3. Experiment Run Structure | 3/3 | Complete | 2026-05-14 |
 | 4. Per-Step Data Pipeline | 0/? | Not started | - |
 
 ---
