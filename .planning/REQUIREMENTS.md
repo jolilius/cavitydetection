@@ -110,16 +110,16 @@ OpenEvolve writes checkpoints every N iterations (default: 5), each containing t
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| RUNORG-01 | TBD | [ ] |
-| RUNORG-02 | TBD | [ ] |
-| RUNORG-03 | TBD | [ ] |
-| MIGRATE-01 | TBD | [ ] |
-| CKPT-01 | TBD | [ ] |
-| CKPT-02 | TBD | [ ] |
-| CKPT-03 | TBD | [ ] |
-| EXPLAIN-01 | TBD | [ ] |
-| EXPLAIN-02 | TBD | [ ] |
-| DISPLAY-01 | TBD | [ ] |
+| RUNORG-01 | Phase 3 | [ ] |
+| RUNORG-02 | Phase 3 | [ ] |
+| RUNORG-03 | Phase 3 | [ ] |
+| MIGRATE-01 | Phase 3 | [ ] |
+| DISPLAY-01 | Phase 3 | [ ] |
+| CKPT-01 | Phase 4 | [ ] |
+| CKPT-02 | Phase 4 | [ ] |
+| CKPT-03 | Phase 4 | [ ] |
+| EXPLAIN-01 | Phase 4 | [ ] |
+| EXPLAIN-02 | Phase 4 | [ ] |
 
 ---
 

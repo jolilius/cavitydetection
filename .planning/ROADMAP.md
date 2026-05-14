@@ -1,164 +1,93 @@
 # OpenEvolve Results & Explanations Framework — Roadmap
 
-**Goal:** Consolidate experiment results into a unified format; capture LLM explanations of transformations.
+**Goal:** Consolidate experiment results into a unified format; capture LLM explanations of transformations; enable per-step trajectory analysis.
 
 **Research Focus:** Understand how prompts influence search behavior (convergence speed, quality, strategy).
 
-**Timeline:** 1 week (2026-05-13 to 2026-05-19)
+**Milestone:** v1.0 (Phases 1–2, COMPLETE) + v1.1 (Phases 3–4, current)
 
 ---
 
-## Phase 1: Results Consolidation (Days 1-3)
-**Status:** Ready to start  
-**Success:** Consolidated results loaded into pandas; convergence visible
+## Phases
 
-### Deliverables
-- [ ] Define unified results schema (JSON structure for all metrics, iterations, metadata)
-- [ ] Refactor `run_experiment.py` to output consolidated results per experiment
-- [ ] Implement pandas loader: `load_results(path) → DataFrame`
-- [ ] Update `make evolve-all` to aggregate results (or keep per-prompt JSON, pre-aggregate)
-- [ ] Test on existing cavitydetection experiments
-
-### Results Schema (JSON)
-```json
-{
-  "metadata": {
-    "program": "cavitydetection",
-    "prompt": "baseline",
-    "timestamp": "2026-05-13T10:30:00Z",
-    "total_iterations": 42,
-    "total_seconds": 480,
-    "convergence_iteration": 28
-  },
-  "iterations": [
-    {
-      "iteration": 1,
-      "memory_reads": 123456,
-      "memory_writes": 654321,
-      "timing_seconds": 12.5,
-      "baseline_accesses": 128862705
-    }
-  ]
-}
-```
-
-### Definition of Done
-- ✅ Existing experiment runs produce unified JSON
-- ✅ `pd.read_json(results.json)` works (or custom loader if needed)
-- ✅ Can plot convergence curves: iteration vs memory accesses, colored by prompt
-- ✅ README documents results format and loader usage
+- [x] **Phase 1: Results Consolidation** - Unified JSON schema per experiment; pandas loader functional
+- [x] **Phase 2: LLM Explanations** - Per-iteration explanation capture; `explanation` field in DataFrame
+- [ ] **Phase 3: Experiment Run Structure** - Named runs grouping all prompts; legacy data migrated
+- [ ] **Phase 4: Per-Step Data Pipeline** - Checkpoint-based consolidation with code field; per-checkpoint explanations
 
 ---
 
-## Phase 2: LLM Explanations (Days 4-6)
-**Status:** Blocked until Phase 1 complete  
-**Success:** Explanations captured and visible in results; prompt strategies understood
+## Phase Details
 
-### Deliverables
-- [ ] Design explanation prompt: "Explain transformations in [code] vs baseline"
-- [ ] Integrate explanation capture into `run_experiment.py` post-iteration
-- [ ] Extend results schema to include `explanation` field
-- [ ] Update pandas loader to expose explanations
-- [ ] Test on 1-2 prompt variants (short run, e.g., 10 iterations)
+### Phase 1: Results Consolidation
+**Goal**: Researchers can load all experiment results into a pandas DataFrame without manual parsing
+**Depends on**: Nothing
+**Requirements**: (v1.0 — complete)
+**Success Criteria** (what must be TRUE):
+  1. A single `load_results()` call returns a DataFrame covering all iterations of one experiment
+  2. Researcher can plot convergence curves (iteration vs memory accesses) colored by prompt
+  3. Results file is machine-readable JSON requiring no custom parsing beyond the loader
+**Plans**: Complete
+**Status**: COMPLETE
 
-### Updated Results Schema
-```json
-{
-  "iterations": [
-    {
-      "iteration": 1,
-      "memory_reads": 123456,
-      "memory_writes": 654321,
-      "timing_seconds": 12.5,
-      "explanation": "Reordered loops to improve cache locality; adjacent memory accesses now sequential"
-    }
-  ]
-}
-```
+### Phase 2: LLM Explanations
+**Goal**: Each experiment iteration has a concise LLM-generated explanation stored alongside metrics
+**Depends on**: Phase 1
+**Requirements**: (v1.0 — complete)
+**Success Criteria** (what must be TRUE):
+  1. `df['explanation']` returns a non-empty string for every iteration row
+  2. Explanations mention actual code transformations (loop reorder, cache locality, etc.)
+  3. `get_explanations()` utility surfaces explanation text without raw JSON parsing
+**Plans**: Complete
+**Status**: COMPLETE
 
-### Definition of Done
-- ✅ Explanations are concise (1-2 sentences) and relevant
-- ✅ Can read explanations from DataFrame: `df['explanation']`
-- ✅ Iteration timing includes explanation generation (acceptable overhead?)
-- ✅ README documents explanation prompting and interpretation
+### Phase 3: Experiment Run Structure
+**Goal**: Researchers can group all prompts from one `make evolve-all` invocation as a single named run, and all legacy data is accessible in the new layout without data loss
+**Depends on**: Phase 2
+**Requirements**: RUNORG-01, RUNORG-02, RUNORG-03, MIGRATE-01, DISPLAY-01
+**Success Criteria** (what must be TRUE):
+  1. Running `make evolve-all` produces a single dated run directory (`openevolve_output/runs/<run_id>/`) containing one subdirectory per prompt under `<program>/<prompt>/`
+  2. Each run directory contains `metadata.json` with model name, iteration budget, programs, prompts, config snapshot, and start timestamp — readable without opening any other file
+  3. Existing `baseline/` and `prompt1/` output is accessible at `runs/legacy/cavitydetection/` with all original `results.json` and checkpoint files intact
+  4. `make show-results RUN=<id>` filters output to that run; `make show-results` without argument covers all runs
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 4: Per-Step Data Pipeline
+**Goal**: Researchers can inspect the exact C source and an explanation of what changed at every checkpoint, loaded via the same `load_results()` / `load_all_results()` interface
+**Depends on**: Phase 3
+**Requirements**: CKPT-01, CKPT-02, CKPT-03, EXPLAIN-01, EXPLAIN-02
+**Success Criteria** (what must be TRUE):
+  1. `load_results()` returns one row per checkpoint (not one row per iteration), with `checkpoint_iteration`, `combined_score`, `mem_score`, `time_score`, `code`, and `explanation` all populated
+  2. The `code` column contains the full C source at that checkpoint — researcher can `print(df.iloc[N]['code'])` and see compilable C
+  3. Each explanation describes what changed since the previous checkpoint (or vs `initial_program.c` for checkpoint 0) — a researcher can follow the model's reasoning without manually diffing files
+  4. `load_all_results()` aggregates across all runs, programs, and prompts into a single DataFrame queryable by run ID, program, or prompt name
+**Plans**: TBD
+**UI hint**: no
 
 ---
 
-## Phase 3+: Future (Optional)
-**Status:** Defer to next milestone  
+## Progress Table
 
-### Possible next steps (not committed to):
-- **Multi-program support:** Run same prompts on other algorithms
-- **Metric plugins:** Add valgrind, energy, runtime measurements
-- **Explanation grouping:** Cluster iterations by transformation type
-- **Results visualization:** Generate convergence plots, strategy heatmaps
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Results Consolidation | — | Complete | 2026-05-13 |
+| 2. LLM Explanations | — | Complete | 2026-05-13 |
+| 3. Experiment Run Structure | 0/? | Not started | - |
+| 4. Per-Step Data Pipeline | 0/? | Not started | - |
 
 ---
 
 ## Dependency Graph
 
 ```
-Phase 1 (Results consolidation)
-  ↓ (required by)
-Phase 2 (LLM explanations)
+Phase 1 (Results consolidation) — COMPLETE
   ↓
-Phase 3+ (optional future work)
+Phase 2 (LLM explanations) — COMPLETE
+  ↓
+Phase 3 (Experiment run structure) — v1.1
+  ↓
+Phase 4 (Per-step data pipeline) — v1.1
 ```
 
-**No parallel work:** Phase 2 depends on Phase 1 results schema being final.
-
----
-
-## Risk & Mitigation
-
-| Risk | Mitigation |
-|------|-----------|
-| Explanation generation is slow (>2s/iter) | Monitor timing; accept 1-2s overhead for now; optimize prompt if needed |
-| LLM explanations are incoherent/vague | Iterate prompt; fallback to showing code diffs only |
-| Results format change mid-phase | Lock schema after Phase 1 complete; backfill if needed |
-| Existing experiments need re-run | Keep old results for reference; use consolidated format going forward |
-
----
-
-## Success Definition
-
-✅ **Phase 1:** 
-- Consolidated results in unified format
-- Pandas loader functional
-- Convergence curves visible (iteration vs memory accesses by prompt)
-
-✅ **Phase 2:** 
-- Explanations captured for each iteration
-- Explanations are relevant and concise
-- Research questions partially answered:
-  - Prompt A converges faster than Prompt B (measurable)
-  - Different prompts find different optima (quality comparison)
-  - LLM's strategy is visible (explanation text)
-
----
-
-## Ship Criteria
-
-**After Phase 1:** 
-- Commit consolidated results schema and loader
-- Existing experiments runnable with new format
-- Documentation complete
-
-**After Phase 2:**
-- Commit explanation integration
-- Sample results with explanations for review
-- Full documentation + interpretation guide
-
----
-
-## Daily Standup Template
-
-```
-Date: [DATE]
-Phase: [1 or 2]
-Done: [what got done today]
-Next: [what's next]
-Blockers: [any problems?]
-Confidence: [% estimate for phase completion]
-```
-
+Phase 4 depends on Phase 3: the new `runs/<run_id>/<program>/<prompt>/` directory layout must exist before the checkpoint pipeline reads from it.

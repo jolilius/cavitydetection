@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Experiment Runs + Per-Step Analysis
 status: planning
-last_updated: "2026-05-14T09:39:03.250Z"
+last_updated: "2026-05-14"
 last_activity: 2026-05-14
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -15,198 +15,111 @@ progress:
 
 # Project State & Notes
 
-**Last Updated:** 2026-05-13  
-**Current Phase:** Phase 1 — Results Consolidation (COMPLETE — Wave 1)
+**Last Updated:** 2026-05-14
+**Current Phase:** Phase 3 — Experiment Run Structure (not started)
+
+---
+
+## Current Position
+
+Phase: 3 — Experiment Run Structure
+Plan: — (awaiting /gsd-plan-phase 3)
+Status: Roadmap written; ready for planning
+Last activity: 2026-05-14 — Milestone v1.1 roadmap created (Phases 3 and 4)
 
 ---
 
 ## Key Decisions
 
-1. **Incremental, working system** — Each phase ships value; system remains working
-2. **Phase 1 priority: Results consolidation** — Unified format for pandas analysis
-3. **Phase 2 priority: LLM explanations** — Understand what the model thought
-4. **Defer multi-program + metrics** — Not in M1; add later if needed
-5. **Research focus:** Prompt influence on convergence speed, quality, strategy
+1. **v1.0 complete (Phases 1–2):** Unified JSON, pandas loader, per-iteration explanations all shipped
+2. **v1.1 research goal: trajectory observation** — checkpoints are the unit of analysis, not iterations
+3. **Phase 3 first:** Directory restructure and legacy migration must land before Phase 4 reads from new paths
+4. **Run grouping** — `make evolve-all` stamps a single run ID; all prompts share it; researcher can filter by run
+5. **Checkpoint granularity** — `results.json` rebuilt from `checkpoints/checkpoint_N/` directories; `best/`-only approach dropped
+6. **Per-checkpoint explanation** — compares checkpoint N to checkpoint N-1 (or initial_program.c for checkpoint 0)
+7. **Defer multi-program support** — not in v1.1; future milestone
 
 ---
 
-## Implementation Plan (Phase 1)
+## Phase 3 Scope (Experiment Run Structure)
 
-### Results Schema Design
+Requirements: RUNORG-01, RUNORG-02, RUNORG-03, MIGRATE-01, DISPLAY-01
 
-Goal: Consolidated JSON file per experiment run (all iterations in one file)
+Key deliverables:
+- `run_experiment.py --run <name>` flag; auto-generated run ID from timestamp + model
+- `make evolve-all` creates one run directory, passes run ID to each prompt invocation
+- `openevolve_output/runs/<run_id>/<program>/<prompt>/` layout
+- `metadata.json` per run (model, iterations, programs, prompts, config snapshot, start time)
+- Migration script: `baseline/` and `prompt1/` → `runs/legacy/cavitydetection/`
+- `make show-results RUN=<id>` optional filter
 
-**File structure:**
+---
+
+## Phase 4 Scope (Per-Step Data Pipeline)
+
+Requirements: CKPT-01, CKPT-02, CKPT-03, EXPLAIN-01, EXPLAIN-02
+
+Key deliverables:
+- Consolidator reads `checkpoints/checkpoint_N/best_program.c` + `best_program_info.json` sorted by N
+- Schema per checkpoint row: `checkpoint_iteration`, `best_found_at_iteration`, `code`, `combined_score`, `mem_score`, `time_score`, `explanation`
+- `load_results()` → one row per checkpoint; `load_all_results()` → aggregated DataFrame
+- Explanation generator called once per checkpoint, diff vs previous checkpoint (or baseline for first)
+
+---
+
+## Accumulated Context
+
+### Directory Layout (target)
 
 ```
-results/
-  cavitydetection/
-    baseline.json       (all iterations for "baseline" prompt variant)
-    prompt1.json
-    prompt2.json
-    ...
+openevolve_output/
+  runs/
+    legacy/
+      cavitydetection/
+        baseline/        (migrated from openevolve_output/baseline/)
+        prompt1/         (migrated from openevolve_output/prompt1/)
+    2026-05-14_qwen25-32b/
+      metadata.json
+      cavitydetection/
+        baseline/
+          checkpoints/
+          results.json
+        prompt1/
+          checkpoints/
+          results.json
 ```
 
-**Format (JSON):**
+### Baseline metrics (reference)
 
-```json
-{
-  "metadata": {
-    "program": "cavitydetection",
-    "prompt_variant": "baseline",
-    "timestamp": "2026-05-13T10:30:00Z",
-    "llm_model": "qwen2.5-coder:32b",
-    "total_iterations": 42,
-    "total_runtime_seconds": 480.5,
-    "best_memory_accesses": 98765432,
-    "convergence_iteration": 28
-  },
-  "baseline_metrics": {
-    "memory_accesses": 128862705,
-    "memory_reads": 64431352,
-    "memory_writes": 64431353
-  },
-  "iterations": [
-    {
-      "iteration": 1,
-      "memory_accesses": 127000000,
-      "memory_reads": 63500000,
-      "memory_writes": 63500000,
-      "improvement_percent": 1.45,
-      "iteration_runtime_seconds": 12.3
-    },
-    ...
-  ]
-}
-```
+Unoptimized baseline (initial_program.c, gcc -O0): 128,862,705 total memory accesses
 
-### Pandas Loader Implementation
+| Function | Accesses |
+|----------|----------|
+| GaussBlur | 19,894,278 |
+| ComputeEdges | 67,604,444 |
+| DetectRoots | 41,363,979 |
+| run_pipeline | 4 |
 
-```python
-def load_results(filepath):
-    """Load consolidated results into pandas DataFrame"""
-    import json
-    import pandas as pd
-    
-    with open(filepath) as f:
-        data = json.load(f)
-    
-    meta = data['metadata']
-    baseline = data['baseline_metrics']
-    
-    df = pd.DataFrame(data['iterations'])
-    df['prompt'] = meta['prompt_variant']
-    df['timestamp'] = meta['timestamp']
-    df['baseline_accesses'] = baseline['memory_accesses']
-    
-    return df
-```
-
-### Changes to `run_experiment.py`
-
-- After each iteration, append to consolidated JSON (not separate files)
-- Track baseline metrics per program (already available)
-- Record per-iteration timing
-- Calculate convergence metrics at end
-
-### Backward Compatibility
-
-- Keep old results around (for reference)
-- Use new format going forward
-- Document migration if needed
+Score formula: `mem_score = 128,862,705 / accesses` (>1.0 = better than baseline)
 
 ---
 
-## Phase 2 Plan (LLM Explanations)
+## Blockers & Open Questions
 
-### Explanation Capture
+None currently.
 
-After each mutation evaluation:
-
-```python
-explanation = llm.generate(
-    f"Explain the transformations in this code compared to baseline. "
-    f"What compiler optimizations are present?\n\n{mutated_code}"
-)
-```
-
-### Extended Results Schema
-
-Add `explanation` field to each iteration:
-
-```json
-{
-  "iteration": 1,
-  "memory_accesses": 127000000,
-  "explanation": "Reordered inner loops to improve cache locality; adjacent accesses now sequential.",
-  ...
-}
-```
-
-### Timing Consideration
-
-- Estimate: 1-2 seconds per explanation (LLM inference)
-- For 40 iterations: ~40-80 sec overhead per experiment
-- Acceptable for research? Tune if needed.
+- LLVM instrumentation working
+- Ollama / mandelbrot (100.89.90.6) available
+- Existing results available for migration testing
 
 ---
 
-## Current Confidence & Risks
+## v1.0 Summary (COMPLETE)
 
-| Phase | Confidence | Risk | Mitigation |
-|-------|-----------|------|-----------|
-| Phase 1 | **High** | Breaking existing workflow | Keep old results; implement as new output path |
-| Phase 2 | **Medium** | LLM explanations slow or vague | Monitor timing; tune prompt if incoherent |
+Phase 1: Results Consolidation
+- Unified JSON schema per experiment, `load_results()` → DataFrame, `load_all_results()`
+- Auto-consolidation in `run_experiment.py`, Makefile display targets
 
----
-
-## Timeline Breakdown
-
-**Phase 1 (Days 1-3):**
-
-- Day 1: Design results schema, start refactoring `run_experiment.py`
-- Day 2: Implement pandas loader, test on existing experiments
-- Day 3: Verify convergence visible in pandas; finalize format
-
-**Phase 2 (Days 4-6):**
-
-- Day 4: Design explanation prompt, integrate into experiment loop
-- Day 5: Test on short runs (10 iterations); assess quality/speed
-- Day 6: Full test, documentation
-
-**Phase 3 (Day 7):**
-
-- Buffer for unexpected issues or polish
-
----
-
-## Blockers & Dependencies
-
-**None currently.** 
-
-- LLVM instrumentation working ✓
-- Ollama running ✓
-- Existing results available for testing ✓
-
----
-
-## Open Questions
-
-1. **Explanation quality:** Will the model's explanations be accurate and useful? Plan: test on 1-2 short runs first.
-2. **Explanation timing:** Is 1-2s per iteration acceptable? Plan: monitor and optimize if needed.
-3. **Results aggregation:** Per-prompt JSON or one big JSON per run? Current plan: per-prompt (one file per prompt variant).
-
----
-
-## Communication & Status
-
-- **Next review:** End of Phase 1 (should have working consolidation)
-- **Decision point:** If Phase 2 explanations slow or vague, adjust prompt and re-test
-- **Final ship:** Both phases complete, documentation ready, sample results reviewed
-
-## Current Position
-
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-05-14 — Milestone v1.1 started
+Phase 2: LLM Explanations
+- `explanation_generator.py`, per-iteration explanation capture
+- Schema extended with `explanation` field, `get_explanations()` loader utility
