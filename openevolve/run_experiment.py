@@ -51,65 +51,83 @@ def _generate_explanations_for_experiment(
     explanation_prompt: str,
 ) -> dict:
     """
-    Generate explanations for evolved code in the experiment output.
+    Generate per-checkpoint explanations for evolved code in the experiment output.
 
-    Loads best_program_info.json to extract the evolved code, then calls
-    generate_explanation() for the best solution found.
+    Walks checkpoints/checkpoint_N/ directories in numeric order and generates one
+    LLM explanation per checkpoint, comparing each checkpoint's best_program.c to
+    the previous checkpoint's (sliding window, D-08). The first checkpoint compares
+    to baseline_code (initial_program.c).
 
     Args:
         output_dir: Path to openevolve_output/{prompt_name}/ directory
-        baseline_code: Full baseline program text
+        baseline_code: Full baseline program text (initial_program.c), used as
+            comparison target for the first checkpoint (D-08)
         llm_config: LLM configuration dict
         explanation_prompt: Full explanation prompt text
 
     Returns:
-        Dictionary mapping iteration number -> explanation text (or None).
-        Empty dict if no explanations generated.
+        Dictionary mapping integer checkpoint folder N -> explanation text (or None).
+        Keyed by folder N (not info["iteration"]) to match _extract_iterations() lookup.
+        Empty dict if no checkpoints found or generate_explanation unavailable.
 
     Side Effects:
         - Writes status messages to stderr
-        - Non-blocking: returns empty dict on error
+        - Non-blocking: returns empty dict on error; skips incomplete checkpoints with warning
     """
 
     if generate_explanation is None:
         print("Warning: generate_explanation not available, skipping explanations", file=sys.stderr)
         return {}
 
+    checkpoints_dir = os.path.join(output_dir, "checkpoints")
+    if not os.path.isdir(checkpoints_dir):
+        print(f"Warning: no checkpoints/ directory at {output_dir}, skipping explanations", file=sys.stderr)
+        return {}
+
+    # List checkpoint_N subdirectories and sort numerically (not lexicographically)
+    dirs = sorted(
+        [d for d in os.listdir(checkpoints_dir)
+         if d.startswith("checkpoint_") and os.path.isdir(os.path.join(checkpoints_dir, d))],
+        key=lambda d: int(d.replace("checkpoint_", ""))
+    )
+    if not dirs:
+        return {}
+
+    # D-08: first checkpoint compares against initial_program.c (baseline_code)
+    prev_code = baseline_code
     explanations = {}
 
-    # Load best result to extract evolved code
-    best_path = os.path.join(output_dir, "best", "best_program_info.json")
-    if not os.path.isfile(best_path):
-        print("Warning: best_program_info.json not found, skipping explanations", file=sys.stderr)
-        return {}
+    for ckpt_dir in dirs:
+        n = int(ckpt_dir.replace("checkpoint_", ""))
+        code_path = os.path.join(checkpoints_dir, ckpt_dir, "best_program.c")
 
-    try:
-        with open(best_path) as f:
-            best_info = json.load(f)
-    except (IOError, json.JSONDecodeError) as e:
-        print(f"Warning: Could not load best_program_info.json: {e}", file=sys.stderr)
-        return {}
+        if not os.path.isfile(code_path):
+            print(f"Warning: no best_program.c in {ckpt_dir}, skipping", file=sys.stderr)
+            # Do NOT advance prev_code — next valid checkpoint still compares to last good code
+            continue
 
-    # Extract evolved code and iteration number
-    evolved_code = best_info.get("program_source", best_info.get("evolved_code"))
-    iteration_num = best_info.get("iteration", 1)
+        try:
+            with open(code_path) as f:
+                evolved_code = f.read()
+        except (IOError, OSError) as e:
+            print(f"Warning: Could not read {code_path}: {e}", file=sys.stderr)
+            continue
 
-    if not evolved_code:
-        print("Warning: evolved code not found in best_program_info.json, skipping explanations", file=sys.stderr)
-        return {}
+        print(f"Generating explanation for checkpoint {n}...", file=sys.stderr)
+        explanation = generate_explanation(
+            evolved_code=evolved_code,
+            baseline_code=prev_code,
+            llm_config=llm_config,
+            explanation_prompt_text=explanation_prompt,
+        )
 
-    # Generate explanation for the best solution
-    print(f"Generating explanation for iteration {iteration_num}...", file=sys.stderr)
-    explanation = generate_explanation(
-        evolved_code=evolved_code,
-        baseline_code=baseline_code,
-        llm_config=llm_config,
-        explanation_prompt_text=explanation_prompt,
-    )
+        # Store even if None — consolidate_results only attaches non-None values to rows
+        explanations[n] = explanation
+        if explanation:
+            print(f"  checkpoint_{n}: {explanation[:80]}...", file=sys.stderr)
 
-    if explanation:
-        explanations[iteration_num] = explanation
-        print(f"  Explanation: {explanation[:80]}...", file=sys.stderr)
+        # Advance sliding window (only after successful read, per D-08)
+        prev_code = evolved_code
 
     return explanations
 
