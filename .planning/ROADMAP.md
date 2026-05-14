@@ -50,8 +50,11 @@
   2. Each run directory contains `metadata.json` with model name, iteration budget, programs, prompts, config snapshot, and start timestamp — readable without opening any other file
   3. Existing `baseline/` and `prompt1/` output is accessible at `runs/legacy/cavitydetection/` with all original `results.json` and checkpoint files intact
   4. `make show-results RUN=<id>` filters output to that run; `make show-results` without argument covers all runs
-**Plans**: TBD
-**UI hint**: no
+**Plans**: 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Test scaffolding + run_experiment.py run ID, --run/--output-root args, and metadata.json write
+- [ ] 03-02-PLAN.md — Migration script (migrate_legacy.py) for all legacy flat directories
+- [ ] 03-03-PLAN.md — Display scripts adaptation (show_results.py, show_consolidated.py) + Makefile RUN= pass-through and evolve-all run grouping
 
 ### Phase 4: Per-Step Data Pipeline
 **Goal**: Researchers can inspect the exact C source and an explanation of what changed at every checkpoint, loaded via the same `load_results()` / `load_all_results()` interface
@@ -73,7 +76,7 @@
 |-------|----------------|--------|-----------|
 | 1. Results Consolidation | — | Complete | 2026-05-13 |
 | 2. LLM Explanations | — | Complete | 2026-05-13 |
-| 3. Experiment Run Structure | 0/? | Not started | - |
+| 3. Experiment Run Structure | 0/3 | Not started | - |
 | 4. Per-Step Data Pipeline | 0/? | Not started | - |
 
 ---
