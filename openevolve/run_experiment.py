@@ -171,7 +171,8 @@ def main():
 
         # Generate explanations if not disabled via environment variable
         explanations = {}
-        if os.environ.get("EXPLAIN_GENERATIONS", "1") != "0":
+        explanations_enabled = os.environ.get("EXPLAIN_GENERATIONS", "1") != "0"
+        if explanations_enabled:
             if baseline_code and explanation_prompt:
                 try:
                     explain_start = time.time()
@@ -198,7 +199,7 @@ def main():
                 prompt_variant=args.prompt,
                 baseline_accesses=128_862_705,
                 explanations=explanations,
-                explanation_prompt_text=explanation_prompt,
+                explanation_prompt_text=explanation_prompt if explanations_enabled else None,
                 prompt_version="1.0",
             )
             # Write to output_dir/results.json
