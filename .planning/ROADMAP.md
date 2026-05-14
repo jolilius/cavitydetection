@@ -58,7 +58,7 @@ Plans:
 - [x] 03-02-PLAN.md — Migration script (migrate_legacy.py) for all legacy flat directories
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03-03-PLAN.md — Display scripts adaptation (show_results.py, show_consolidated.py) + Makefile RUN= pass-through and evolve-all run grouping
+- [x] 03-03-PLAN.md — Display scripts adaptation (show_results.py, show_consolidated.py) + Makefile RUN= pass-through and evolve-all run grouping
 
 **Cross-cutting constraints:**
 - `output_dir` passed to `consolidate_experiment()` must always point to the prompt-level directory (`runs/<run_id>/cavitydetection/<prompt>/`), not the run root
