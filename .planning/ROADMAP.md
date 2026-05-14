@@ -73,7 +73,15 @@ Plans:
   2. The `code` column contains the full C source at that checkpoint — researcher can `print(df.iloc[N]['code'])` and see compilable C
   3. Each explanation describes what changed since the previous checkpoint (or vs `initial_program.c` for checkpoint 0) — a researcher can follow the model's reasoning without manually diffing files
   4. `load_all_results()` aggregates across all runs, programs, and prompts into a single DataFrame queryable by run ID, program, or prompt name
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+Plans:
+
+**Wave 1**
+- [ ] 04-01-PLAN.md — Wave 0 checkpoint tests + checkpoint-based `_extract_iterations()` in `consolidate_results.py` + extended column list in `results_loader.py` (CKPT-01, CKPT-02, CKPT-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 04-02-PLAN.md — Per-checkpoint explanation loop in `run_experiment.py` (EXPLAIN-01, EXPLAIN-02)
+- [ ] 04-03-PLAN.md — Wave 0 regenerate test + `--regenerate` flag + `regenerate_results()` helper in `migrate_legacy.py` (D-09, D-10)
 **UI hint**: no
 
 ---
@@ -85,7 +93,7 @@ Plans:
 | 1. Results Consolidation | — | Complete | 2026-05-13 |
 | 2. LLM Explanations | — | Complete | 2026-05-13 |
 | 3. Experiment Run Structure | 3/3 | Complete | 2026-05-14 |
-| 4. Per-Step Data Pipeline | 0/? | Not started | - |
+| 4. Per-Step Data Pipeline | 0/3 | Planned | - |
 
 ---
 
