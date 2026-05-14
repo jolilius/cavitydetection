@@ -18,7 +18,9 @@ import sys
 import tempfile
 import time
 
+import re
 import yaml
+from datetime import datetime, timezone
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 
@@ -109,6 +111,46 @@ def _generate_explanations_for_experiment(
         print(f"  Explanation: {explanation[:80]}...", file=sys.stderr)
 
     return explanations
+
+
+def generate_run_id(config_path: str) -> str:
+    """Generate run ID from current timestamp and model name from config."""
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M")
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        model = config.get("llm", {}).get("primary_model", "unknown")
+    except Exception:
+        model = "unknown"
+    sanitized = re.sub(r"[^a-zA-Z0-9-]+", "-", model)
+    sanitized = re.sub(r"-+", "-", sanitized).strip("-")
+    return f"{ts}_{sanitized}"
+
+
+def write_run_metadata(run_dir: str, config: dict, run_id: str, iterations: int, prompt: str) -> None:
+    """Write (or merge) metadata.json in the run directory."""
+    meta_path = os.path.join(run_dir, "metadata.json")
+    if os.path.isfile(meta_path):
+        with open(meta_path) as f:
+            existing = json.load(f)
+    else:
+        existing = {}
+    prompts_so_far = existing.get("prompts", [])
+    if prompt not in prompts_so_far:
+        prompts_so_far.append(prompt)
+    start_ts = existing.get("start_timestamp", datetime.now(timezone.utc).isoformat())
+    metadata = {
+        "run_id": run_id,
+        "model": config.get("llm", {}).get("primary_model", "unknown"),
+        "total_iterations": iterations,
+        "programs": ["cavitydetection"],
+        "prompts": prompts_so_far,
+        "config_snapshot": config,
+        "start_timestamp": start_ts,
+    }
+    os.makedirs(run_dir, exist_ok=True)
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2)
 
 
 def main():
