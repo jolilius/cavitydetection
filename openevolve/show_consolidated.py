@@ -4,7 +4,7 @@ Display consolidated results from all experiments (unified format).
 Shows convergence speed and best quality per prompt.
 
 Usage (from project root):
-    ../openevolve/.venv/bin/python openevolve/show_consolidated.py
+    ../openevolve/.venv/bin/python openevolve/show_consolidated.py [--run <run_id>]
 
 Columns:
   prompt          — name of the prompt variant
@@ -14,19 +14,67 @@ Columns:
   mem_score       — memory access score (>1.0 = better than baseline)
 """
 
+import argparse
+import glob
 import os
+import re
 import sys
+
+import pandas as pd
 
 # Add parent directory to path for imports
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from results_loader import load_all_results
+from results_loader import load_results
+
+
+def extract_run_id(filepath: str) -> str:
+    """Extract run_id from a results.json filepath under the runs/ tree."""
+    filepath = filepath.replace("\\", "/")
+    parts = filepath.split("/")
+    try:
+        runs_idx = parts.index("runs")
+        return parts[runs_idx + 1]
+    except (ValueError, IndexError):
+        return "unknown"
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Show consolidated results from all experiments")
+    parser.add_argument("--run", default=None, help="Filter to a specific run ID")
+    args = parser.parse_args()
+
     try:
-        df = load_all_results()
+        results_root = os.path.join(SCRIPT_DIR, "openevolve_output", "runs")
+
+        paths = glob.glob(os.path.join(results_root, "**", "results.json"), recursive=True)
+
+        if not paths:
+            print("No results found — run make evolve-all first.")
+            return
+
+        frames = []
+        for path in paths:
+            try:
+                file_df = load_results(path)
+                file_df["run_id"] = extract_run_id(path)
+                frames.append(file_df)
+            except Exception:
+                continue
+
+        if not frames:
+            print("No results found — run make evolve-all first.")
+            return
+
+        df = pd.concat(frames, ignore_index=True)
+
+        if args.run is not None:
+            df = df[df["run_id"] == args.run]
+            if df.empty:
+                print(f"No results found for run: {args.run}")
+                return
+
         if df.empty:
             print("No consolidated results found. Run 'make evolve-all' first.")
             return
