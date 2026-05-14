@@ -4,9 +4,10 @@ Run one OpenEvolve experiment for a named prompt.
 
 Usage (from project root):
     ../openevolve/.venv/bin/python openevolve/run_experiment.py <prompt_name> [--iterations N]
+    ../openevolve/.venv/bin/python openevolve/run_experiment.py <prompt_name> --run <id> --output-root <path>
 
-Reads  openevolve/prompts/<prompt_name>.txt  as the system message,
-writes results to  openevolve/openevolve_output/<prompt_name>/.
+Reads  openevolve/prompts/<prompt_name>.txt  as the system message.
+Writes results to  <output-root>/runs/<run-id>/cavitydetection/<prompt_name>/.
 Always starts fresh (no checkpoint).
 """
 
@@ -18,7 +19,9 @@ import sys
 import tempfile
 import time
 
+import re
 import yaml
+from datetime import datetime, timezone
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 
@@ -111,10 +114,54 @@ def _generate_explanations_for_experiment(
     return explanations
 
 
+def generate_run_id(config_path: str) -> str:
+    """Generate run ID from current timestamp and model name from config."""
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M")
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        model = config.get("llm", {}).get("primary_model", "unknown")
+    except Exception:
+        model = "unknown"
+    sanitized = re.sub(r"[^a-zA-Z0-9-]+", "-", model)
+    sanitized = re.sub(r"-+", "-", sanitized).strip("-")
+    return f"{ts}_{sanitized}"
+
+
+def write_run_metadata(run_dir: str, config: dict, run_id: str, iterations: int, prompt: str) -> None:
+    """Write (or merge) metadata.json in the run directory."""
+    meta_path = os.path.join(run_dir, "metadata.json")
+    if os.path.isfile(meta_path):
+        with open(meta_path) as f:
+            existing = json.load(f)
+    else:
+        existing = {}
+    prompts_so_far = existing.get("prompts", [])
+    if prompt not in prompts_so_far:
+        prompts_so_far.append(prompt)
+    start_ts = existing.get("start_timestamp", datetime.now(timezone.utc).isoformat())
+    metadata = {
+        "run_id": run_id,
+        "model": config.get("llm", {}).get("primary_model", "unknown"),
+        "total_iterations": iterations,
+        "programs": ["cavitydetection"],
+        "prompts": prompts_so_far,
+        "config_snapshot": config,
+        "start_timestamp": start_ts,
+    }
+    os.makedirs(run_dir, exist_ok=True)
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run one prompt experiment")
     parser.add_argument("prompt", help="Prompt name (must match prompts/<name>.txt)")
     parser.add_argument("--iterations", type=int, default=80)
+    parser.add_argument("--run", default=None,
+        help="Run ID to group results (default: auto-generated from timestamp + model)")
+    parser.add_argument("--output-root", default=None,
+        help="Override output base directory (default: openevolve/openevolve_output/)")
     args = parser.parse_args()
 
     prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{args.prompt}.txt")
@@ -124,13 +171,23 @@ def main():
     with open(prompt_file) as f:
         prompt_text = f.read()
 
-    with open(os.path.join(SCRIPT_DIR, "config.yaml")) as f:
+    config_path = os.path.join(SCRIPT_DIR, "config.yaml")
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     config["prompt"]["system_message"] = prompt_text
 
-    output_dir = os.path.join(SCRIPT_DIR, "openevolve_output", args.prompt)
+    output_root = args.output_root or os.path.join(SCRIPT_DIR, "openevolve_output")
+    run_id = args.run or generate_run_id(config_path)
+    run_dir = os.path.join(output_root, "runs", run_id)
+    if not os.path.abspath(run_dir).startswith(os.path.abspath(output_root)):
+        sys.exit(f"Error: --run value escapes the output root: {run_id}")
+    output_dir = os.path.join(run_dir, "cavitydetection", args.prompt)
     os.makedirs(output_dir, exist_ok=True)
+    try:
+        write_run_metadata(run_dir, config, run_id, args.iterations, args.prompt)
+    except Exception as e:
+        print(f"Warning: Could not write run metadata: {e}", file=sys.stderr)
 
     python     = os.path.join(OPENEVOLVE, ".venv", "bin", "python")
     run_script = os.path.join(OPENEVOLVE, "openevolve-run.py")
