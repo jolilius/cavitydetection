@@ -12,76 +12,17 @@ Columns:
   accesses      — absolute load+store count for the best evolved pipeline
   reduction     — percentage reduction vs. baseline (128,862,705 accesses)
 
-Supports both consolidated (results.json) and legacy (best_program_info.json) formats.
-Prefers consolidated format if available.
+Reads consolidated results.json files from the runs/ tree.
 """
 
 import argparse
 import glob
-import json
 import os
-import re
 import sys
 
 SCRIPT_DIR         = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_ROOT        = os.path.join(SCRIPT_DIR, "openevolve_output")
 REFERENCE_ACCESSES = 128_862_705
-
-
-def load_consolidated_result(prompt_name: str) -> dict | None:
-    """Try to load consolidated results.json"""
-    try:
-        from results_loader import load_results
-        results_path = os.path.join(OUTPUT_ROOT, prompt_name, "results.json")
-        if os.path.isfile(results_path):
-            df = load_results(results_path)
-            if not df.empty:
-                best_row = df[df['memory_accesses'] == df['memory_accesses'].min()].iloc[0]
-                return {
-                    'prompt': prompt_name,
-                    'mem_score': best_row['mem_score'],
-                    'iter_found': int(best_row['iteration']),
-                    'accesses': int(best_row['memory_accesses']),
-                    'format': 'consolidated',
-                }
-    except Exception:
-        pass
-    return None
-
-
-def load_legacy_result(prompt_name: str) -> dict | None:
-    """Load result from legacy best_program_info.json format"""
-    info_path = os.path.join(OUTPUT_ROOT, prompt_name, "best", "best_program_info.json")
-    if not os.path.isfile(info_path):
-        return None
-    try:
-        with open(info_path) as f:
-            info = json.load(f)
-        metrics = info.get("metrics", {})
-        score = metrics.get("mem_score") or metrics.get("combined_score")
-        if score is None:
-            return None
-        accesses = int(REFERENCE_ACCESSES / score) if score > 0 else 0
-        return {
-            "prompt": prompt_name,
-            "mem_score": score,
-            "iter_found": info.get("iteration", "?"),
-            "accesses": accesses,
-            "format": "legacy",
-        }
-    except Exception:
-        return None
-
-
-def load_result(prompt_name: str) -> dict | None:
-    """Load results, preferring consolidated format, falling back to legacy"""
-    # Try consolidated first
-    result = load_consolidated_result(prompt_name)
-    if result:
-        return result
-
-    # Fall back to legacy format
-    return load_legacy_result(prompt_name)
 
 
 def load_result_from_path(results_path: str, run_id: str, prompt_name: str) -> dict | None:
