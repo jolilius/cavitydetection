@@ -257,7 +257,7 @@ def main():
 
         # Consolidate results after OpenEvolve completes
         try:
-            result = consolidate_experiment(
+            consolidate_experiment(
                 output_dir=output_dir,
                 program="cavitydetection",
                 prompt_variant=args.prompt,
@@ -266,11 +266,12 @@ def main():
                 explanation_prompt_text=explanation_prompt if explanations_enabled else None,
                 prompt_version="1.0",
             )
-            # Write to output_dir/results.json
+            # consolidate_experiment already writes results.json; just confirm it exists
             results_path = os.path.join(output_dir, "results.json")
-            with open(results_path, "w") as f:
-                json.dump(result, f, indent=2)
-            print(f"✓ Consolidated results: {results_path}")
+            if os.path.isfile(results_path):
+                print(f"✓ Consolidated results: {results_path}")
+            else:
+                print(f"Warning: results.json was not created at {results_path}", file=sys.stderr)
         except Exception as e:
             print(f"Warning: Could not consolidate results: {e}")
             # Non-blocking; experiment succeeded even if consolidation fails
