@@ -179,13 +179,13 @@ evolve-explain-test:
 	@echo "  make show-consolidated-results"
 
 show-explanations:
-	$(OPENEVOLVE_PYTHON) -c "import sys; sys.path.insert(0, 'openevolve'); from results_loader import load_all_results; df = load_all_results(); import pandas as pd; print(df[df['explanation'].notna()][['iteration', 'prompt', 'improvement_percent', 'explanation']].to_string(index=False) if len(df) > 0 and 'explanation' in df.columns else 'No results or no explanation column found')"
+	$(OPENEVOLVE_PYTHON) -c "import sys, os; sys.path.insert(0, 'openevolve'); from results_loader import load_all_results; df = load_all_results(os.path.join('openevolve', 'openevolve_output')); import pandas as pd; print(df[df['explanation'].notna()][['iteration', 'prompt', 'improvement_percent', 'explanation']].to_string(index=False) if len(df) > 0 and 'explanation' in df.columns else 'No results or no explanation column found')"
 
 test-explanations-disabled:
 	@echo "Testing with EXPLAIN_GENERATIONS=0..."
 	EXPLAIN_GENERATIONS=0 $(OPENEVOLVE_PYTHON) openevolve/run_experiment.py baseline --iterations 5
 	@echo "✓ Experiment completed without explanations"
-	@grep -q "explanation" openevolve_output/baseline/results.json && echo "⚠ Explanation field found in results" || echo "✓ No explanations in results (as expected)"
+	@grep -q "explanation" openevolve/openevolve_output/baseline/results.json && echo "⚠ Explanation field found in results" || echo "✓ No explanations in results (as expected)"
 
 show-results:
 	$(OPENEVOLVE_PYTHON) openevolve/show_results.py

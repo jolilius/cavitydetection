@@ -26,7 +26,8 @@ from results_loader import load_all_results
 
 def main():
     try:
-        df = load_all_results()
+        results_root = os.path.join(SCRIPT_DIR, "openevolve_output")
+        df = load_all_results(results_root)
         if df.empty:
             print("No consolidated results found. Run 'make evolve-all' first.")
             return
