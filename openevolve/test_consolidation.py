@@ -32,24 +32,29 @@ def test_consolidation():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Step 1: Create synthetic OpenEvolve output structure
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Step 1: Create synthetic checkpoints/checkpoint_25/ structure
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_25")
+        os.makedirs(ckpt_path)
 
         # Write minimal best_program_info.json (matching OpenEvolve format)
         synthetic_best = {
             "iteration": 25,
+            "current_iteration": 25,
             "metrics": {
                 "mem_score": 1.15,
                 "combined_score": 1.15,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
+        best_path = os.path.join(ckpt_path, "best_program_info.json")
         with open(best_path, "w") as f:
             json.dump(synthetic_best, f)
+
+        # Write synthetic best_program.c
+        code_path = os.path.join(ckpt_path, "best_program.c")
+        with open(code_path, "w") as f:
+            f.write("/* synthetic checkpoint 25 */")
 
         print(f"✓ Created synthetic best_program_info.json at {best_path}")
 
@@ -91,8 +96,8 @@ def test_consolidation():
             assert "memory_reads" in iter_record
             assert "memory_writes" in iter_record
             assert "improvement_percent" in iter_record
-            assert "iteration_runtime_seconds" in iter_record
             assert "mem_score" in iter_record
+            # Note: iteration_runtime_seconds is not emitted by checkpoint-based rows (Phase 4)
 
             # Verify derived fields are computed correctly
             baseline_acc = baseline["memory_accesses"]
@@ -117,7 +122,7 @@ def test_consolidation():
         assert "memory_reads" in df.columns
         assert "memory_writes" in df.columns
         assert "improvement_percent" in df.columns
-        assert "iteration_runtime_seconds" in df.columns
+        # Note: iteration_runtime_seconds is not present in checkpoint-based rows
         assert "mem_score" in df.columns
         assert "prompt" in df.columns
         assert "timestamp" in df.columns
@@ -153,32 +158,33 @@ def test_consolidate_with_explanations():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_42/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_42")
+        os.makedirs(ckpt_path)
 
         synthetic_best = {
             "iteration": 42,
+            "current_iteration": 42,
             "metrics": {
                 "mem_score": 1.25,
                 "combined_score": 1.25,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 42 */")
 
-        # Consolidate with explanations
+        # Consolidate with explanations keyed by folder N
         explanations = {
             42: "Reordered loops to improve cache locality"
         }
 
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
 
-        # Verify explanation is in result
+        # Verify explanation is in result (iteration alias == checkpoint_n == 42)
         assert result['iterations'][0].get('explanation') == "Reordered loops to improve cache locality"
         print("✓ test_consolidate_with_explanations passed")
 
@@ -189,23 +195,24 @@ def test_consolidate_without_explanations():
     from results_loader import load_results
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_25/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_25")
+        os.makedirs(ckpt_path)
 
         synthetic_best = {
             "iteration": 25,
+            "current_iteration": 25,
             "metrics": {
                 "mem_score": 1.15,
                 "combined_score": 1.15,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 25 */")
 
         # Consolidate without explanations
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=None)
@@ -221,38 +228,38 @@ def test_consolidate_partial_explanations():
     from consolidate_results import consolidate_experiment
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic best_program_info.json
-        best_dir = os.path.join(tmpdir, "best")
-        os.makedirs(best_dir)
+        # Create synthetic checkpoints/checkpoint_5/ structure (migrated from best/ fixture)
+        ckpt_path = os.path.join(tmpdir, "checkpoints", "checkpoint_5")
+        os.makedirs(ckpt_path)
 
-        # Create synthetic best data with iteration 5
         synthetic_best = {
             "iteration": 5,
+            "current_iteration": 5,
             "metrics": {
                 "mem_score": 1.10,
                 "combined_score": 1.10,
             },
             "timestamp": "2026-05-13T14:00:00Z",
-            "runtime_seconds": 15.5,
         }
 
-        best_path = os.path.join(best_dir, "best_program_info.json")
-        with open(best_path, "w") as f:
+        with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
             json.dump(synthetic_best, f)
+        with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+            f.write("/* checkpoint 5 */")
 
-        # Explanations for iteration 5 and some other iteration (won't be used)
+        # Explanations for folder N=5 and some other N (won't be used since only checkpoint_5 exists)
         explanations = {
             5: "Refined approach",
-            1: "First attempt",  # This won't be used since only iteration 5 is in result
+            1: "First attempt",  # This won't be used since only checkpoint_5 is in result
         }
 
         result = consolidate_experiment(tmpdir, prompt_variant="test", explanations=explanations)
 
-        # Verify iteration 5 has explanation
+        # Verify checkpoint_5 has explanation (iteration alias == checkpoint_n == 5)
         result_dict = {it['iteration']: it for it in result['iterations']}
         assert result_dict[5].get('explanation') == "Refined approach"
 
-        # Verify iteration 5 is the only iteration
+        # Verify only one checkpoint row exists
         assert len(result_dict) == 1
         print("✓ test_consolidate_partial_explanations passed")
 
@@ -376,6 +383,183 @@ def test_load_phase1_results():
         print("✓ test_load_phase1_results passed")
 
 
+def test_checkpoint_based_consolidation():
+    """Test that consolidation builds results from checkpoints/checkpoint_N/ dirs (CKPT-01, CKPT-02)."""
+    from consolidate_results import consolidate_experiment
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic checkpoints/checkpoint_N/ tree for N in {5, 10, 15}
+        # N=10 intentionally has best_found_at=5 (divergence per D-05)
+        checkpoint_data = [
+            (5,  1.10, 5),   # (folder_n, mem_score, best_found_at_iteration)
+            (10, 1.15, 5),   # divergence: best was found at iter 5, checkpoint written at 10
+            (15, 1.20, 10),
+        ]
+        for n, mem_score, best_found_at in checkpoint_data:
+            ckpt_path = os.path.join(tmpdir, "checkpoints", f"checkpoint_{n}")
+            os.makedirs(ckpt_path)
+            info = {
+                "iteration": best_found_at,
+                "current_iteration": n,
+                "metrics": {"mem_score": mem_score},
+                "timestamp": "2026-05-14T10:00:00Z",
+            }
+            with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
+                json.dump(info, f)
+            with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+                f.write(f"/* checkpoint {n} */")
+
+        result = consolidate_experiment(tmpdir, prompt_variant="test_ckpt")
+
+        assert len(result["iterations"]) == 3, f"Expected 3 rows, got {len(result['iterations'])}"
+
+        required_keys = {"checkpoint_iteration", "best_found_at_iteration", "code",
+                         "combined_score", "mem_score", "time_score", "iteration"}
+        for row in result["iterations"]:
+            for key in required_keys:
+                assert key in row, f"Missing key '{key}' in row: {list(row.keys())}"
+            assert row["time_score"] is None, f"time_score must be None (D-01), got {row['time_score']}"
+            assert row["combined_score"] == row["mem_score"], (
+                f"combined_score {row['combined_score']} must equal mem_score {row['mem_score']} (D-02)"
+            )
+            assert row["iteration"] == row["checkpoint_iteration"], (
+                f"iteration alias {row['iteration']} must equal checkpoint_iteration {row['checkpoint_iteration']}"
+            )
+
+        # Verify numeric sort order: [5, 10, 15] not lexicographic
+        ckpt_ns = [row["checkpoint_iteration"] for row in result["iterations"]]
+        assert ckpt_ns == [5, 10, 15], f"Checkpoints not in numeric order: {ckpt_ns}"
+
+        # Verify D-05 divergence: for N=10, best_found_at_iteration=5, checkpoint_iteration=10
+        row_10 = next(r for r in result["iterations"] if r["checkpoint_iteration"] == 10)
+        assert row_10["best_found_at_iteration"] == 5, (
+            f"Expected best_found_at_iteration=5 for checkpoint_10, got {row_10['best_found_at_iteration']}"
+        )
+        assert row_10["checkpoint_iteration"] == 10, (
+            f"Expected checkpoint_iteration=10, got {row_10['checkpoint_iteration']}"
+        )
+
+        # Verify code field contains the checkpoint marker
+        for row in result["iterations"]:
+            n = row["checkpoint_iteration"]
+            assert f"checkpoint {n}" in row["code"], (
+                f"Expected 'checkpoint {n}' in code, got: {row['code']}"
+            )
+
+        print("✓ test_checkpoint_based_consolidation passed")
+
+
+def test_checkpoint_load_results():
+    """Test that load_results() exposes Phase 4 columns from checkpoint-based results (CKPT-03)."""
+    from consolidate_results import consolidate_experiment
+    from results_loader import load_results
+    import pandas as pd
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic checkpoints/checkpoint_N/ tree
+        checkpoint_data = [
+            (5,  1.10, 5),
+            (10, 1.15, 5),
+            (15, 1.20, 10),
+        ]
+        for n, mem_score, best_found_at in checkpoint_data:
+            ckpt_path = os.path.join(tmpdir, "checkpoints", f"checkpoint_{n}")
+            os.makedirs(ckpt_path)
+            info = {
+                "iteration": best_found_at,
+                "current_iteration": n,
+                "metrics": {"mem_score": mem_score},
+                "timestamp": "2026-05-14T10:00:00Z",
+            }
+            with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
+                json.dump(info, f)
+            with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+                f.write(f"/* checkpoint {n} */")
+
+        consolidate_experiment(tmpdir, prompt_variant="test_ckpt")
+        df = load_results(os.path.join(tmpdir, "results.json"))
+
+        assert len(df) == 3, f"Expected 3 rows, got {len(df)}"
+
+        required_cols = {"checkpoint_iteration", "best_found_at_iteration", "code",
+                         "combined_score", "time_score", "mem_score", "iteration", "prompt"}
+        assert required_cols <= set(df.columns), (
+            f"Missing columns: {required_cols - set(df.columns)}"
+        )
+
+        assert df.iloc[0]["checkpoint_iteration"] == 5, (
+            f"First row checkpoint_iteration should be 5, got {df.iloc[0]['checkpoint_iteration']}"
+        )
+        assert df.iloc[2]["checkpoint_iteration"] == 15, (
+            f"Last row checkpoint_iteration should be 15, got {df.iloc[2]['checkpoint_iteration']}"
+        )
+
+        # time_score is JSON null → becomes NaN through pandas
+        assert df["time_score"].isna().all(), "time_score column should be all NaN"
+
+        # combined_score must equal mem_score for every row
+        assert (df["combined_score"] == df["mem_score"]).all(), (
+            "combined_score must equal mem_score for all rows"
+        )
+
+        print("✓ test_checkpoint_load_results passed")
+
+
+def test_checkpoint_explanation_threading():
+    """Test that explanations dict keyed by folder N threads correctly (EXPLAIN-01, EXPLAIN-02)."""
+    from consolidate_results import consolidate_experiment
+    from results_loader import load_results
+    import pandas as pd
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create synthetic checkpoints/checkpoint_N/ tree
+        checkpoint_data = [
+            (5,  1.10, 5),
+            (10, 1.15, 5),
+            (15, 1.20, 10),
+        ]
+        for n, mem_score, best_found_at in checkpoint_data:
+            ckpt_path = os.path.join(tmpdir, "checkpoints", f"checkpoint_{n}")
+            os.makedirs(ckpt_path)
+            info = {
+                "iteration": best_found_at,
+                "current_iteration": n,
+                "metrics": {"mem_score": mem_score},
+                "timestamp": "2026-05-14T10:00:00Z",
+            }
+            with open(os.path.join(ckpt_path, "best_program_info.json"), "w") as f:
+                json.dump(info, f)
+            with open(os.path.join(ckpt_path, "best_program.c"), "w") as f:
+                f.write(f"/* checkpoint {n} */")
+
+        # Explanations dict keyed by integer folder N (Pitfall 2: not JSON iteration field)
+        explanations = {
+            5: "first delta",
+            10: "second delta",
+            15: "third delta",
+        }
+
+        result = consolidate_experiment(
+            tmpdir, prompt_variant="test_ckpt", explanations=explanations
+        )
+
+        # Each row should have explanation matching the dict value at its checkpoint_iteration
+        for row in result["iterations"]:
+            n = row["checkpoint_iteration"]
+            assert row.get("explanation") == explanations[n], (
+                f"checkpoint_{n}: expected explanation '{explanations[n]}', "
+                f"got '{row.get('explanation')}'"
+            )
+
+        df = load_results(os.path.join(tmpdir, "results.json"))
+        assert df["explanation"].notna().all(), "All rows should have explanations"
+        assert df.iloc[0]["explanation"] == "first delta", (
+            f"First row explanation should be 'first delta', got '{df.iloc[0]['explanation']}'"
+        )
+
+        print("✓ test_checkpoint_explanation_threading passed")
+
+
 if __name__ == "__main__":
     try:
         # Run main consolidation test
@@ -394,6 +578,14 @@ if __name__ == "__main__":
         print("\n" + "="*60)
         print("✅ All explanation tests passed")
         print("="*60)
+
+        print("\n" + "="*60)
+        print("Running Phase 4 checkpoint tests")
+        print("="*60)
+        test_checkpoint_based_consolidation()
+        test_checkpoint_load_results()
+        test_checkpoint_explanation_threading()
+
         sys.exit(0 if success else 1)
     except Exception as e:
         print(f"\n❌ Test failed: {e}", file=sys.stderr)

@@ -141,13 +141,18 @@ def load_results(filepath: str) -> pd.DataFrame:
         logger.warning(f"No iterations found in {filepath}")
         df = pd.DataFrame(
             columns=[
+                "checkpoint_iteration",
                 "iteration",
+                "best_found_at_iteration",
+                "code",
                 "memory_accesses",
                 "memory_reads",
                 "memory_writes",
                 "improvement_percent",
                 "iteration_runtime_seconds",
                 "mem_score",
+                "combined_score",
+                "time_score",
                 "prompt",
                 "timestamp",
                 "baseline_accesses",
@@ -168,15 +173,20 @@ def load_results(filepath: str) -> pd.DataFrame:
     if "explanation" not in df.columns:
         df["explanation"] = pd.NA
 
-    # Reorder columns: iteration, prompt, memory_accesses first; metadata last
+    # Reorder columns: checkpoint_iteration, iteration, prompt first; metadata last
     primary_cols = [
-        "iteration",
+        "checkpoint_iteration",       # Phase 4 primary key
+        "iteration",                  # backward-compat alias (sort key)
         "prompt",
         "memory_accesses",
         "improvement_percent",
         "mem_score",
+        "combined_score",             # Phase 4
+        "time_score",                 # Phase 4
     ]
     secondary_cols = [
+        "best_found_at_iteration",    # Phase 4
+        "code",                       # Phase 4 (full C source)
         "memory_reads",
         "memory_writes",
         "iteration_runtime_seconds",
