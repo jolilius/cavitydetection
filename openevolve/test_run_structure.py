@@ -135,30 +135,53 @@ def test_metadata_fields():
 
 
 def test_migration_moves():
-    """Test that migrate_legacy moves all non-runs/ subdirs to runs/legacy/cavitydetection/."""
+    """Test that migrate_legacy moves prompt experiment dirs and protects infrastructure dirs."""
     from migrate_legacy import migrate_legacy
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create synthetic source dirs simulating a flat legacy layout
+        # Create synthetic prompt experiment dirs with marker files
         os.makedirs(os.path.join(tmpdir, "baseline"))
+        with open(os.path.join(tmpdir, "baseline", "results.json"), "w") as f:
+            f.write("{}")
         os.makedirs(os.path.join(tmpdir, "prompt1"))
+        with open(os.path.join(tmpdir, "prompt1", "results.json"), "w") as f:
+            f.write("{}")
+
+        # Create OpenEvolve infrastructure dirs (should NOT be moved)
         os.makedirs(os.path.join(tmpdir, "best"))
+        os.makedirs(os.path.join(tmpdir, "checkpoints"))
+        os.makedirs(os.path.join(tmpdir, "logs"))
+
+        # Create an empty dir without marker files (should NOT be moved)
+        os.makedirs(os.path.join(tmpdir, "unrelated"))
 
         migrate_legacy(tmpdir)
 
-        # All three dirs should now be under runs/legacy/cavitydetection/
+        # Prompt experiment dirs should now be under runs/legacy/cavitydetection/
         assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "baseline")), \
             "baseline/ not found at runs/legacy/cavitydetection/baseline/"
         assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "prompt1")), \
             "prompt1/ not found at runs/legacy/cavitydetection/prompt1/"
-        assert os.path.isdir(os.path.join(tmpdir, "runs", "legacy", "cavitydetection", "best")), \
-            "best/ not found at runs/legacy/cavitydetection/best/"
 
-        # Original locations should no longer exist (moved, not copied)
+        # Original prompt locations should no longer exist (moved, not copied)
         assert not os.path.exists(os.path.join(tmpdir, "baseline")), \
             "baseline/ still exists at original location (should have been moved)"
+        assert not os.path.exists(os.path.join(tmpdir, "prompt1")), \
+            "prompt1/ still exists at original location (should have been moved)"
 
-        # runs/ itself should still exist (skip = {"runs"} worked)
+        # Infrastructure dirs should remain in place (protected by skip set)
+        assert os.path.isdir(os.path.join(tmpdir, "best")), \
+            "best/ was incorrectly moved (OpenEvolve infrastructure dir)"
+        assert os.path.isdir(os.path.join(tmpdir, "checkpoints")), \
+            "checkpoints/ was incorrectly moved (OpenEvolve infrastructure dir)"
+        assert os.path.isdir(os.path.join(tmpdir, "logs")), \
+            "logs/ was incorrectly moved (OpenEvolve infrastructure dir)"
+
+        # Empty dir without marker files should remain in place
+        assert os.path.isdir(os.path.join(tmpdir, "unrelated")), \
+            "unrelated/ was incorrectly moved (no results.json or best_program_info.json)"
+
+        # runs/ itself should still exist
         assert os.path.isdir(os.path.join(tmpdir, "runs")), \
             "runs/ directory was incorrectly removed"
 
