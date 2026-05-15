@@ -257,7 +257,7 @@ def _extract_iterations(
         # Thread explanation by folder N (Pitfall 2: key by folder N, not JSON iteration)
         if explanations and checkpoint_n in explanations:
             explanation = explanations[checkpoint_n]
-            if explanation is not None:
+            if explanation:  # truthy check: filters both None and empty string
                 row["explanation"] = explanation
 
         rows.append(row)
