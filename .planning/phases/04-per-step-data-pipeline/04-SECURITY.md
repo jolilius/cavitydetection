@@ -4,10 +4,11 @@ audit_mode: RETROACTIVE-STRIDE
 asvs_level: L1
 block_on: critical
 audited_at: 2026-05-15
-status: OPEN_THREATS
+reaudited_at: 2026-05-15
+status: SECURED
 threats_total: 10
-threats_closed: 7
-threats_open: 3
+threats_closed: 10
+threats_open: 0
 ---
 
 # Phase 04 — Security Audit Report
@@ -15,7 +16,7 @@ threats_open: 3
 **Mode:** RETROACTIVE-STRIDE (no pre-existing threat model; register built from implementation)
 **ASVS Level:** L1
 **Block On:** critical
-**Result:** OPEN_THREATS — 2 BLOCKERS, 1 WARNING open
+**Result:** SECURED — all 10 threats closed; 0 open
 
 ---
 
@@ -36,100 +37,65 @@ Threats derived from implementation analysis of: `consolidate_results.py`, `resu
 | I-02 | Info Disclosure | LLM API endpoint leaks via results.json (config snapshot in metadata.json) | accept | `metadata.json` written by `write_run_metadata` at `run_experiment.py:149-176` includes `config_snapshot` which contains the full YAML config including `llm.api_base`. This is local-only data; no network export path exists. Accepted: internal research tool with no multi-user or remote-access surface. |
 | R-01 | Repudiation | Regeneration overwrites experiment history without audit trail | mitigate | `migrate_legacy.py:84-88` — `results.json.v1` backup created via `shutil.copy2` before any overwrite. Backup name is fixed (not timestamped), so only one generation of backup is retained. Accepted limitation documented in Plan 04-03. |
 | S-01 | Spoofing | No authentication boundary | accept | This is a local CLI tool with no network endpoints, no authentication, and no multi-user model. Spoofing is not a relevant threat at this trust boundary. |
+| CR-01 | Tampering/Elevation | `--run` path traversal bypasses `runs/` containment | mitigate | `run_experiment.py:205` — `re.match(r'^[a-zA-Z0-9_-]+$', args.run)` rejects traversal chars. `run_experiment.py:211-213` — guard constructs `runs_dir = os.path.join(os.path.abspath(output_root), "runs") + os.sep` and checks `os.path.abspath(run_dir).startswith(runs_dir)`, binding containment to `runs/` with trailing separator. Both conditions of declared fix verified present. Re-audit 2026-05-15. |
+| CR-02 | Tampering (data integrity) | Falsy `or`-chain silently replaces `mem_score=0.0` with `1.0` | mitigate | `consolidate_results.py:227-229` — falsy or-chain replaced by explicit `None`-check: `_ms = metrics.get("mem_score"); _cs = metrics.get("combined_score"); mem_score = _ms if _ms is not None else (_cs if _cs is not None else 1.0)`. `0.0` is preserved as a valid score. Re-audit 2026-05-15. |
+| WR-03 | Info Disclosure | Temp config YAML placed in source tree; leaks on `yaml.dump` failure | mitigate | `run_experiment.py:239` — `tempfile.mkstemp(suffix=".yaml", prefix=".tmp_config_")` with no `dir=` argument (uses system tmpdir, not `SCRIPT_DIR`). `tmp_config` bound before `try:` at line 240; `yaml.dump` executes inside try; `finally` at lines 299-301 guards `os.path.exists(tmp_config)` before `os.unlink`. All failure paths covered. Re-audit 2026-05-15. |
 
 ---
 
-## Open Threats (BLOCKERS)
+## Formerly Open Threats — CLOSED by re-audit 2026-05-15
 
-### OPEN-01 — CR-01: `--run` path traversal bypasses `runs/` containment
+All three threats that were OPEN in the original audit (2026-05-15) have been remediated and verified closed in the re-audit (2026-05-15).
 
-| Field | Value |
-|-------|-------|
-| **Threat ID** | OPEN-01 |
-| **STRIDE** | Tampering / Elevation |
-| **Severity** | BLOCKER |
-| **File** | `openevolve/run_experiment.py:207-209` |
-| **Mitigation Expected** | `--run` value validated to alphanumeric+underscore+hyphen, OR path guard checks `startswith(output_root/runs/)` |
-| **Evidence of Mitigation** | ABSENT |
+### CR-01 — `--run` path traversal (was OPEN-01, BLOCKER) — NOW CLOSED
 
-**Proof of absence:**
+**Commits fixing this:** fa3f3a1
 
-Line 189 applies the alphanumeric regex only to `args.prompt`:
-```
-if not re.match(r'^[a-zA-Z0-9_-]+$', args.prompt):
-```
+**Verification (re-audit 2026-05-15):**
 
-No equivalent validation exists for `args.run`. The guard at line 208:
+`run_experiment.py:205`: `if args.run is not None and not re.match(r'^[a-zA-Z0-9_-]+$', args.run):` — regex rejects traversal characters (`..`, `/`, etc.) in `--run` value. `sys.exit` called on violation.
+
+`run_experiment.py:211-213`:
 ```python
-if not os.path.abspath(run_dir).startswith(os.path.abspath(output_root)):
+runs_dir = os.path.join(os.path.abspath(output_root), "runs") + os.sep
+if not os.path.abspath(run_dir).startswith(runs_dir):
+    sys.exit(f"Error: --run value escapes the runs/ directory: {run_id}")
 ```
-checks against `output_root`, NOT `output_root/runs/`. With `--run ../evil`:
-- `run_dir` = `output_root/runs/../evil` = `output_root/evil` (after abspath)
-- `output_root/evil`.startswith(`output_root`) = **True** — guard passes
-- Experiment data is written to `output_root/evil/`, escaping the `runs/` tree
+Guard now checks against `output_root/runs/` with trailing `os.sep` — the previously exploitable `../evil` bypass is eliminated. With the regex gate, no `..` characters can reach the path guard anyway. Defense in depth: both layers present.
 
-**Impact:** An operator running `run_experiment.py baseline --run ../../somewhere` can cause `metadata.json`, `results.json`, and checkpoint data to be written to arbitrary paths within the filesystem subtree that `output_root` is a prefix of (including sibling directories). On a shared workstation this could overwrite other users' data.
-
-**Required fix before ship:** Apply the same regex to `args.run` when provided, or change the guard to `startswith(os.path.abspath(output_root) + os.sep + "runs" + os.sep)`.
+**Status: CLOSED**
 
 ---
 
-### OPEN-02 — CR-02: Falsy `or`-chain silently replaces `mem_score=0.0` with `1.0`
+### CR-02 — Falsy `or`-chain replacing `mem_score=0.0` (was OPEN-02, BLOCKER) — NOW CLOSED
 
-| Field | Value |
-|-------|-------|
-| **Threat ID** | OPEN-02 |
-| **STRIDE** | Tampering (data integrity) |
-| **Severity** | BLOCKER |
-| **File** | `openevolve/consolidate_results.py:227` |
-| **Mitigation Expected** | `None`-aware fallback chain that preserves `0.0` as a valid score |
-| **Evidence of Mitigation** | ABSENT |
+**Commits fixing this:** 2fa6fb8
 
-**Proof of absence:**
+**Verification (re-audit 2026-05-15):**
 
-Line 227 reads:
+`consolidate_results.py:227-229`:
 ```python
-mem_score = metrics.get("mem_score") or metrics.get("combined_score") or 1.0
+_ms = metrics.get("mem_score")
+_cs = metrics.get("combined_score")
+mem_score = _ms if _ms is not None else (_cs if _cs is not None else 1.0)
 ```
+Falsy `or`-chain entirely removed. Explicit `is not None` guards preserve `0.0` as a valid score distinct from absent key. Pattern applied to both `mem_score` and `combined_score` fallback.
 
-Python's `or` operator treats `0.0` as falsy. When `metrics["mem_score"] == 0.0` (valid: candidate instrumented binary reported zero accesses, e.g., compilation failure with exit 0), the chain skips to `metrics.get("combined_score")`, then to `1.0`. The checkpoint is recorded as scoring `1.0` (baseline performance) rather than `0.0` (catastrophic failure), silently discarding a meaningful data point.
-
-**Impact:** A failing candidate is indistinguishable from the baseline in `results.json`. Convergence analysis, best-result selection, and comparison reports are silently corrupted for any run that produces a zero-score checkpoint.
-
-**Required fix before ship:** Replace with a `None`-aware check:
-```python
-mem_score = (
-    metrics.get("mem_score")
-    if metrics.get("mem_score") is not None
-    else metrics.get("combined_score")
-    if metrics.get("combined_score") is not None
-    else 1.0
-)
-```
+**Status: CLOSED**
 
 ---
 
-## Open Threats (WARNINGS — not blockers at `block_on: critical`)
+### WR-03 — Temp config in source tree / cleanup gap (was OPEN-03, WARNING) — NOW CLOSED
 
-### OPEN-03 — WR-03: Temp config YAML placed in source tree; leaks on `yaml.dump` failure
+**Commits fixing this:** cb1e2d2
 
-| Field | Value |
-|-------|-------|
-| **Threat ID** | OPEN-03 |
-| **STRIDE** | Information Disclosure |
-| **Severity** | WARNING |
-| **File** | `openevolve/run_experiment.py:235-241` |
-| **Mitigation Expected** | Temp file written to `tempfile.gettempdir()`, and its creation covered by the `try/finally` cleanup block |
-| **Evidence of Mitigation** | ABSENT |
+**Verification (re-audit 2026-05-15):**
 
-**Proof of absence:**
+`run_experiment.py:239`: `tmp_fd, tmp_config = tempfile.mkstemp(suffix=".yaml", prefix=".tmp_config_")` — `mkstemp` with no `dir=` argument; resolves to `tempfile.gettempdir()` (system tmpdir), not `SCRIPT_DIR`.
 
-Line 236: `dir=SCRIPT_DIR` places `.tmp_config_*.yaml` inside `openevolve/` (the source tree).
-The `with tempfile.NamedTemporaryFile(...)` block at lines 235-239 is **outside** the `try/finally` block which begins at line 241. If `yaml.dump` raises (e.g., non-serializable config value), the temp file exists on disk in `SCRIPT_DIR` and is never unlinked. The `finally: os.unlink(tmp_config)` at line 298 never executes because `yaml.dump` failure raises before `try:` on line 241 is reached.
+`run_experiment.py:239-301` structure: `tmp_config` binding at line 239 precedes `try:` at line 240. `yaml.dump` executes inside `try` at line 242. `finally:` at lines 299-301 guards `os.path.exists(tmp_config)` before `os.unlink(tmp_config)`. All failure paths (including `yaml.dump` exception) result in cleanup.
 
-**Impact:** Config YAML containing `llm.api_base` (Ollama endpoint URL, potentially an authenticated remote host) leaks into `openevolve/` as `.tmp_config_*.yaml`, appears in `git status`, and persists until manual cleanup. On a shared machine, readable by other local users.
-
-**Recommended fix:** Use `tempfile.gettempdir()` for `dir=`, and wrap the `NamedTemporaryFile` creation inside the `try` block so `finally` covers cleanup.
+**Status: CLOSED**
 
 ---
 
@@ -196,7 +162,28 @@ No `is not None` guard. Confirmed unchanged from code review finding.
 
 ## Next Steps
 
-1. **OPEN-01 (BLOCKER):** Add `if args.run is not None and not re.match(r'^[a-zA-Z0-9_-]+$', args.run): sys.exit(...)` at `run_experiment.py` before line 207. Then re-audit.
-2. **OPEN-02 (BLOCKER):** Replace falsy `or`-chain at `consolidate_results.py:227` with `None`-aware check. Then re-audit.
-3. **OPEN-03 (WARNING):** Move `dir=SCRIPT_DIR` to `tempfile.gettempdir()` and restructure the `NamedTemporaryFile` + `try/finally` to ensure cleanup on all failure paths.
-4. Re-run `/gsd-secure-phase` after implementing mitigations.
+All previously-open threats are now closed. No outstanding required actions for this phase.
+
+Future hardening (optional, non-blocking):
+- UF-02: Align `convergence_iteration` alias with `best_found_at_iteration` field name for schema consistency.
+- UF-03: Standardize empty-string vs. `None` explanation storage for consistent downstream handling.
+- R-01: Rotate `results.json.v1` backups with timestamps if multi-generation history becomes a requirement.
+
+---
+
+## Re-Audit Trail
+
+### Re-audit 2026-05-15 — Verify fixes for CR-01, CR-02, WR-03
+
+**Auditor:** gsd-security-auditor (claude-sonnet-4-6)
+**Scope:** Re-verification of 3 previously-open threats only. All other threats unchanged from original audit.
+**Commits reviewed:** fa3f3a1 (CR-01), 2fa6fb8 (CR-02), cb1e2d2 (WR-03)
+**Files read:** `openevolve/run_experiment.py`, `openevolve/consolidate_results.py`
+
+| Threat ID | Prior Status | New Status | Verification Method |
+|-----------|-------------|------------|---------------------|
+| CR-01 (OPEN-01) | OPEN / BLOCKER | CLOSED | Grep confirmed `re.match(r'^[a-zA-Z0-9_-]+$', args.run)` at line 205 and `startswith(runs_dir)` with `runs_dir` containing `os.sep` suffix at lines 211-213 |
+| CR-02 (OPEN-02) | OPEN / BLOCKER | CLOSED | Grep confirmed `_ms if _ms is not None else` pattern at lines 227-229; falsy or-chain absent |
+| WR-03 (OPEN-03) | OPEN / WARNING | CLOSED | Grep confirmed `tempfile.mkstemp` at line 239 with no `dir=` argument; `try/finally` structure at lines 240-301 covers all paths |
+
+**Result:** All 10/10 threats closed. Phase 04 cleared for ship.
