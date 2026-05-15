@@ -224,7 +224,9 @@ def _extract_iterations(
             continue
 
         metrics = info.get("metrics", {})
-        mem_score = metrics.get("mem_score") or metrics.get("combined_score") or 1.0
+        _ms = metrics.get("mem_score")
+        _cs = metrics.get("combined_score")
+        mem_score = _ms if _ms is not None else (_cs if _cs is not None else 1.0)
 
         # D-05: use JSON 'iteration' (best-found generation), NOT 'current_iteration'
         best_found_at = info.get("iteration", checkpoint_n)
