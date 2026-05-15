@@ -202,11 +202,15 @@ def main():
 
     config["prompt"]["system_message"] = prompt_text
 
+    if args.run is not None and not re.match(r'^[a-zA-Z0-9_-]+$', args.run):
+        sys.exit(f"Error: --run value must be alphanumeric with underscores/hyphens, got: {args.run!r}")
+
     output_root = args.output_root or os.path.join(SCRIPT_DIR, "openevolve_output")
     run_id = args.run if args.run is not None else generate_run_id(config_path)
     run_dir = os.path.join(output_root, "runs", run_id)
-    if not os.path.abspath(run_dir).startswith(os.path.abspath(output_root)):
-        sys.exit(f"Error: --run value escapes the output root: {run_id}")
+    runs_dir = os.path.join(os.path.abspath(output_root), "runs") + os.sep
+    if not os.path.abspath(run_dir).startswith(runs_dir):
+        sys.exit(f"Error: --run value escapes the runs/ directory: {run_id}")
     output_dir = os.path.join(run_dir, "cavitydetection", args.prompt)
     os.makedirs(output_dir, exist_ok=True)
     try:
