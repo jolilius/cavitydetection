@@ -236,13 +236,11 @@ def main():
     except IOError as e:
         print(f"Warning: Could not load explanation prompt: {e}", file=sys.stderr)
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, dir=SCRIPT_DIR, prefix=".tmp_config_"
-    ) as tmp:
-        yaml.dump(config, tmp, default_flow_style=False, allow_unicode=True)
-        tmp_config = tmp.name
-
+    tmp_fd, tmp_config = tempfile.mkstemp(suffix=".yaml", prefix=".tmp_config_")
     try:
+        with os.fdopen(tmp_fd, "w") as tmp:
+            yaml.dump(config, tmp, default_flow_style=False, allow_unicode=True)
+
         subprocess.run(
             [
                 python, run_script,
@@ -299,7 +297,8 @@ def main():
             # Non-blocking; experiment succeeded even if consolidation fails
 
     finally:
-        os.unlink(tmp_config)
+        if os.path.exists(tmp_config):
+            os.unlink(tmp_config)
 
 
 if __name__ == "__main__":
