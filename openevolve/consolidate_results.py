@@ -96,7 +96,7 @@ def consolidate_experiment(
         # Sort by memory_accesses to find best
         best_iter = min(iterations, key=lambda x: x["memory_accesses"])
         best_memory_accesses = best_iter["memory_accesses"]
-        convergence_iteration = best_iter["iteration"]
+        convergence_iteration = best_iter.get("best_found_at_iteration", best_iter["iteration"])
 
     # Calculate total runtime
     total_runtime_seconds = sum(
